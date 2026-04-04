@@ -69,38 +69,38 @@ const HEADER_FONT = Platform.select({
   default: undefined,
 });
 const TACTICAL_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#08111A' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#ADC2D4' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#050A10' }] },
+  { elementType: 'geometry', stylers: [{ color: '#EDF7FF' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#5F7A97' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#FFFFFF' }] },
   {
     featureType: 'administrative',
     elementType: 'geometry.stroke',
-    stylers: [{ color: '#112331' }],
+    stylers: [{ color: '#C9DCEC' }],
   },
   {
     featureType: 'landscape',
     elementType: 'geometry',
-    stylers: [{ color: '#09131D' }],
+    stylers: [{ color: '#F6FBFF' }],
   },
   {
     featureType: 'poi',
     elementType: 'geometry',
-    stylers: [{ color: '#0B1823' }],
+    stylers: [{ color: '#EEF7E9' }],
   },
   {
     featureType: 'road',
     elementType: 'geometry',
-    stylers: [{ color: '#183040' }],
+    stylers: [{ color: '#FFFFFF' }],
   },
   {
     featureType: 'road.highway',
     elementType: 'geometry',
-    stylers: [{ color: '#224054' }],
+    stylers: [{ color: '#FFE7B3' }],
   },
   {
     featureType: 'water',
     elementType: 'geometry',
-    stylers: [{ color: '#050E16' }],
+    stylers: [{ color: '#BEE8FF' }],
   },
 ];
 
@@ -1193,9 +1193,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         <LinearGradient
           pointerEvents="none"
           colors={[
-            'rgba(4, 8, 14, 0.78)',
-            'rgba(7, 18, 26, 0.18)',
-            'rgba(4, 8, 14, 0.9)',
+            'rgba(190, 232, 255, 0.32)',
+            'rgba(255, 255, 255, 0.04)',
+            'rgba(255, 243, 224, 0.42)',
           ]}
           locations={[0, 0.42, 1]}
           style={styles.mapAtmosphere}
@@ -1321,7 +1321,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                 <Icon
                   name="flask-outline"
                   size={14}
-                  color={useMockTerritories ? '#051217' : '#F1F5FA'}
+                  color={useMockTerritories ? '#0D4D7A' : '#5C7694'}
                 />
                 <Text
                   style={[
@@ -1360,13 +1360,13 @@ const RunMap = ({ navigation }: { navigation: any }) => {
             style={styles.controlButton}
             onPress={handleCenterOnUser}
           >
-            <Icon name="locate" size={22} color="#E8F7FF" />
+            <Icon name="locate" size={22} color="#2D4663" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.controlButton}
             onPress={() => setShowMapTypeOverlay(true)}
           >
-            <Icon name="layers-outline" size={22} color="#E8F7FF" />
+            <Icon name="layers-outline" size={22} color="#2D4663" />
           </TouchableOpacity>
         </View>
 
@@ -1427,7 +1427,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
             <View style={styles.overlayHeader}>
               <Text style={styles.overlayTitle}>Map Layers</Text>
               <TouchableOpacity onPress={() => setShowMapTypeOverlay(false)}>
-                <Icon name="close" size={24} color="#FFF3C4" />
+                <Icon name="close" size={24} color="#46627F" />
               </TouchableOpacity>
             </View>
 
@@ -1450,7 +1450,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                           : 'layers-outline'
                     }
                     size={22}
-                    color={mapType === type ? '#FFD34D' : '#E3E9F5'}
+                    color={mapType === type ? '#F2A12D' : '#5F7997'}
                   />
                   <Text
                     style={[
@@ -1461,7 +1461,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                     {type.charAt(0).toUpperCase() + type.slice(1)}
                   </Text>
                   {mapType === type && (
-                    <Icon name="checkmark-circle" size={20} color="#FFD34D" />
+                    <Icon name="checkmark-circle" size={20} color="#F2A12D" />
                   )}
                 </TouchableOpacity>
               ))}
@@ -1536,7 +1536,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#03080E',
+    backgroundColor: '#EAF7FF',
   },
   mapContainer: {
     flex: 1,
@@ -1556,15 +1556,15 @@ const styles = StyleSheet.create({
     right: 0,
     top: '24%',
     height: 1,
-    backgroundColor: 'rgba(41, 240, 215, 0.12)',
+    backgroundColor: 'rgba(87, 184, 255, 0.12)',
   },
   scanlineMid: {
     top: '54%',
-    backgroundColor: 'rgba(255, 211, 77, 0.1)',
+    backgroundColor: 'rgba(242, 161, 45, 0.08)',
   },
   scanlineBottom: {
     top: '82%',
-    backgroundColor: 'rgba(255, 122, 69, 0.12)',
+    backgroundColor: 'rgba(255, 139, 94, 0.1)',
   },
   overlayChipsContainer: {
     position: 'absolute',
@@ -1584,9 +1584,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: 'rgba(9, 15, 24, 0.84)',
+    backgroundColor: 'rgba(255,255,255,0.86)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(213, 230, 243, 0.95)',
   },
   filterChipActiveTeal: {
     backgroundColor: '#29F0D7',
@@ -1601,26 +1601,26 @@ const styles = StyleSheet.create({
     borderColor: '#FFC2AA',
   },
   filterChipText: {
-    color: '#F1F5FA',
+    color: '#5C7694',
     fontSize: 13,
     fontWeight: '700',
   },
   filterChipTextDark: {
-    color: '#051217',
+    color: '#0D4D7A',
   },
   filterChipTextDarkWarm: {
-    color: '#1E1104',
+    color: '#7A5010',
   },
   legend: {
     position: 'absolute',
     left: 16,
     bottom: 308,
-    backgroundColor: 'rgba(8, 13, 20, 0.88)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(214, 232, 244, 0.95)',
   },
   legendItem: {
     flexDirection: 'row',
@@ -1647,7 +1647,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   legendText: {
-    color: '#D7DFED',
+    color: '#69819F',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1661,12 +1661,12 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 18,
-    backgroundColor: 'rgba(10, 16, 25, 0.88)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(214, 232, 244, 0.95)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: '#BFD8EE',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
@@ -1753,39 +1753,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(8, 15, 25, 0.95)',
+    backgroundColor: 'rgba(255, 250, 243, 0.97)',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 211, 77, 0.25)',
+    borderColor: 'rgba(240, 210, 156, 0.72)',
   },
   captureTextWrap: {
     alignItems: 'flex-start',
   },
   captureTitle: {
-    color: '#FFF4C7',
+    color: '#8C651B',
     fontSize: 16,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
   },
   captureSubtitle: {
-    color: '#C5D1E0',
+    color: '#6E89A5',
     fontSize: 12,
     marginTop: 2,
   },
   overlayBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(2, 4, 8, 0.72)',
+    backgroundColor: 'rgba(70, 99, 129, 0.22)',
   },
   mapTypeOverlay: {
-    backgroundColor: '#0D1721',
+    backgroundColor: '#FFF9EF',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingBottom: 38,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(240, 220, 188, 0.9)',
   },
   overlayHeader: {
     flexDirection: 'row',
@@ -1794,10 +1794,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: '#F2E5D0',
   },
   overlayTitle: {
-    color: '#FFF5CF',
+    color: '#2A4361',
     fontSize: 24,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
@@ -1814,35 +1814,35 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: '#F7FBFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: '#E1EEF8',
   },
   mapTypeOptionActive: {
-    backgroundColor: 'rgba(255, 211, 77, 0.09)',
-    borderColor: 'rgba(255, 211, 77, 0.25)',
+    backgroundColor: 'rgba(255, 217, 140, 0.24)',
+    borderColor: 'rgba(242, 161, 45, 0.32)',
   },
   mapTypeText: {
     flex: 1,
-    color: '#E7EEF8',
+    color: '#5F7997',
     fontSize: 16,
     fontWeight: '700',
   },
   mapTypeTextActive: {
-    color: '#FFF1B2',
+    color: '#8C651B',
   },
   bottomSheet: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(6, 11, 18, 0.98)',
+    backgroundColor: 'rgba(255, 250, 243, 0.98)',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(241, 219, 182, 0.8)',
   },
   dragHandleContainer: {
     alignItems: 'center',
@@ -1853,11 +1853,11 @@ const styles = StyleSheet.create({
     width: 58,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255, 211, 77, 0.5)',
+    backgroundColor: 'rgba(242, 161, 45, 0.45)',
   },
   bottomSheetEyebrow: {
     marginTop: 10,
-    color: '#FFD34D',
+    color: '#D58A15',
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1.5,
@@ -1876,21 +1876,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: '#F7FBFF',
     borderRadius: 18,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: '#E1EEF8',
   },
   quickStatValue: {
-    color: '#F6F8FD',
+    color: '#2A4361',
     fontSize: 17,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
     marginTop: 4,
   },
   quickStatLabel: {
-    color: '#98A6C0',
+    color: '#7A90A9',
     fontSize: 11,
     marginTop: 2,
   },

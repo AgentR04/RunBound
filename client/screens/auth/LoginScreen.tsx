@@ -4,6 +4,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import GlassPanel from '../../components/ui/GlassPanel';
 import { useAuth } from '../../context/AuthContext';
 
 interface LoginScreenProps {
@@ -23,7 +25,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
   const { login } = useAuth();
 
   const handleLogin = async () => {
@@ -41,7 +42,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
     try {
       await login(email.trim(), password);
-      // Navigation will be handled by AuthContext
     } catch (error: any) {
       Alert.alert('Login Failed', error.message || 'Invalid email or password');
     } finally {
@@ -49,99 +49,103 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     }
   };
 
-  const navigateToRegister = () => {
-    navigation.navigate('Register');
-  };
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.header}>
-        <Image
-          source={require('../../assets/logo/RunBound White.png')}
-          style={styles.logo}
-        />
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>
-          Sign in to continue your territory conquest
-        </Text>
-      </View>
+      <StatusBar barStyle="dark-content" />
+      <LinearGradient
+        colors={['#BEE8FF', '#EAF7FF', '#FFF3E0']}
+        style={styles.background}
+      />
+      <View style={styles.orbTop} />
+      <View style={styles.orbBottom} />
 
-      <View style={styles.form}>
-        <View style={styles.inputContainer}>
-          <Ionicons
-            name="mail-outline"
-            size={20}
-            color="#777"
-            style={styles.inputIcon}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Email Address"
-            placeholderTextColor="#777"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Ionicons
-            name="lock-closed-outline"
-            size={20}
-            color="#777"
-            style={styles.inputIcon}
-          />
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder="Password"
-            placeholderTextColor="#777"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            autoCapitalize="none"
-          />
-          <TouchableOpacity
-            style={styles.eyeIcon}
-            onPress={() => setShowPassword(!showPassword)}
-          >
-            <Ionicons
-              name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-              size={20}
-              color="#777"
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../../assets/logo/RunBound White.png')}
+              style={styles.logo}
             />
-          </TouchableOpacity>
+          </View>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>
+            Continue your Mumbai conquest and pick up where your last run ended.
+          </Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
+        <GlassPanel
+          style={styles.formShell}
+          accentColors={['rgba(255, 208, 122, 0.7)', 'rgba(143, 221, 255, 0.55)']}
         >
           <LinearGradient
-            colors={['#43DB25', '#35A91E']}
-            style={styles.gradient}
+            colors={['#FFF9EF', '#FFF3DF']}
+            style={styles.formCard}
           >
-            <Text style={styles.loginButtonText}>
-              {loading ? 'Signing In...' : 'Sign In'}
-            </Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="mail-outline" size={20} color="#7B90AA" />
+              <TextInput
+                style={styles.input}
+                placeholder="Email address"
+                placeholderTextColor="#93A5BC"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputWrap}>
+              <Ionicons name="lock-closed-outline" size={20} color="#7B90AA" />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#93A5BC"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity onPress={() => setShowPassword(prev => !prev)}>
+                <Ionicons
+                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                  size={20}
+                  color="#7B90AA"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.ctaButton, loading && styles.ctaButtonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              <LinearGradient
+                colors={['#AEE4FF', '#87D1FF']}
+                style={styles.ctaGradient}
+              >
+                <Ionicons name="arrow-forward" size={18} color="#0D4D7A" />
+                <Text style={styles.ctaText}>
+                  {loading ? 'Signing In...' : 'Sign In'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.secondaryLink}>
+              <Text style={styles.secondaryLinkText}>Forgot password?</Text>
+            </TouchableOpacity>
           </LinearGradient>
-        </TouchableOpacity>
+        </GlassPanel>
 
-        <TouchableOpacity style={styles.forgotPassword}>
-          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Don't have an account? </Text>
-        <TouchableOpacity onPress={navigateToRegister}>
-          <Text style={styles.registerLink}>Sign Up</Text>
-        </TouchableOpacity>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>New commander?</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+            <Text style={styles.footerLink}>Create account</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -150,93 +154,137 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#141412',
-    padding: 20,
+    backgroundColor: '#EAF7FF',
+  },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  orbTop: {
+    position: 'absolute',
+    top: -24,
+    right: -40,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.32)',
+  },
+  orbBottom: {
+    position: 'absolute',
+    left: -40,
+    bottom: 80,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.26)',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 72,
+    paddingBottom: 30,
   },
   header: {
     alignItems: 'center',
-    marginTop: 80,
-    marginBottom: 50,
+    marginBottom: 28,
+  },
+  logoWrap: {
+    width: 92,
+    height: 92,
+    borderRadius: 32,
+    backgroundColor: '#FFF9F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#CFE6F8',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 7,
   },
   logo: {
-    width: 80,
-    height: 80,
-    marginBottom: 20,
+    width: 54,
+    height: 54,
+    resizeMode: 'contain',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-    fontStyle: 'italic',
+    marginTop: 18,
+    color: '#2A4361',
+    fontSize: 32,
+    fontWeight: '900',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#777',
+    marginTop: 8,
+    color: '#728CAA',
+    fontSize: 15,
     textAlign: 'center',
+    lineHeight: 22,
   },
-  form: {
-    flex: 1,
+  formShell: {
+    marginTop: 6,
   },
-  inputContainer: {
+  formCard: {
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+  },
+  inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1F1F1D',
-    borderRadius: 12,
-    marginBottom: 16,
+    gap: 10,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.8)',
     paddingHorizontal: 16,
-    height: 56,
-  },
-  inputIcon: {
-    marginRight: 12,
+    marginBottom: 14,
   },
   input: {
     flex: 1,
-    color: '#fff',
+    color: '#28435F',
     fontSize: 16,
+    fontWeight: '600',
   },
-  eyeIcon: {
-    padding: 4,
+  ctaButton: {
+    marginTop: 6,
+    borderRadius: 18,
+    overflow: 'hidden',
   },
-  loginButton: {
-    borderRadius: 12,
-    marginTop: 20,
-    marginBottom: 16,
-  },
-  loginButtonDisabled: {
+  ctaButtonDisabled: {
     opacity: 0.7,
   },
-  gradient: {
-    paddingVertical: 16,
-    borderRadius: 12,
+  ctaGradient: {
+    height: 56,
+    borderRadius: 18,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
-  loginButtonText: {
-    color: '#000',
-    fontSize: 18,
-    fontWeight: 'bold',
+  ctaText: {
+    color: '#0D4D7A',
+    fontSize: 16,
+    fontWeight: '900',
   },
-  forgotPassword: {
+  secondaryLink: {
     alignItems: 'center',
+    marginTop: 16,
   },
-  forgotPasswordText: {
-    color: '#777',
-    fontSize: 14,
+  secondaryLinkText: {
+    color: '#7A90A9',
+    fontSize: 13,
+    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 30,
+    gap: 8,
+    marginTop: 'auto',
   },
   footerText: {
-    color: '#777',
+    color: '#7A90A9',
     fontSize: 14,
   },
-  registerLink: {
-    color: '#52FF30',
+  footerLink: {
+    color: '#E3911E',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '900',
   },
 });
 

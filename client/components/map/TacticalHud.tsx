@@ -41,7 +41,7 @@ export default function TacticalHud({
 }: TacticalHudProps) {
   return (
     <LinearGradient
-      colors={['rgba(11, 16, 29, 0.95)', 'rgba(18, 25, 41, 0.86)']}
+      colors={['rgba(255, 248, 236, 0.97)', 'rgba(255, 252, 245, 0.92)']}
       style={styles.container}
     >
       <View style={styles.topRow}>
@@ -55,7 +55,7 @@ export default function TacticalHud({
           </Text>
         </View>
         <View style={styles.rankBadge}>
-          <Icon name="shield-outline" size={16} color="#FFD34D" />
+          <Icon name="shield-outline" size={16} color="#D7931E" />
           <Text style={styles.rankText}>{rankTitle}</Text>
         </View>
       </View>
@@ -80,14 +80,14 @@ export default function TacticalHud({
           <Icon
             name={gpsReady ? 'shield-checkmark' : 'warning-outline'}
             size={14}
-            color={gpsReady ? '#29F0D7' : '#FF7A45'}
+            color={gpsReady ? '#60C676' : '#FF8B5E'}
           />
           <Text style={styles.signalText}>
             {gpsReady ? 'GPS lock confirmed' : 'Awaiting GPS lock'}
           </Text>
         </View>
         <View style={styles.signalPill}>
-          <Icon name="alert-circle-outline" size={14} color="#FFD34D" />
+          <Icon name="flame-outline" size={14} color="#F2A12D" />
           <Text style={styles.signalText}>{contestedCount} contested</Text>
         </View>
       </View>
@@ -104,10 +104,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 211, 77, 0.16)',
-    shadowColor: '#000',
+    borderColor: 'rgba(240, 210, 156, 0.62)',
+    shadowColor: '#CFE3F4',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.26,
     shadowRadius: 18,
     elevation: 10,
   },
@@ -119,14 +119,14 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 18,
-    backgroundColor: '#0F2230',
+    backgroundColor: '#F3FBFF',
     borderWidth: 2,
-    borderColor: '#29F0D7',
+    borderColor: '#2AB8D8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#EAFBFF',
+    color: '#23415E',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -135,13 +135,13 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   eyebrow: {
-    color: '#FFD34D',
+    color: '#D58A15',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.6,
   },
   playerName: {
-    color: '#F7F7F8',
+    color: '#2A4361',
     fontSize: 24,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
@@ -152,15 +152,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 211, 77, 0.12)',
+    backgroundColor: 'rgba(255, 217, 140, 0.28)',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 211, 77, 0.22)',
+    borderColor: 'rgba(240, 184, 74, 0.28)',
   },
   rankText: {
-    color: '#FFF1B6',
+    color: '#8C651B',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -171,21 +171,19 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: 'rgba(5, 9, 18, 0.75)',
+    backgroundColor: 'rgba(255,255,255,0.76)',
     borderRadius: 18,
     paddingVertical: 10,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   statValue: {
-    color: '#F8FCFF',
+    color: '#2A4361',
     fontSize: 20,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
   },
   statLabel: {
-    color: '#A3AEC6',
+    color: '#8096AF',
     fontSize: 11,
     marginTop: 2,
     textTransform: 'uppercase',
@@ -199,15 +197,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.62)',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
   },
   signalText: {
-    color: '#D5DBE8',
+    color: '#6E88A5',
     fontSize: 11,
     fontWeight: '700',
   },

@@ -45,7 +45,7 @@ function LoadingScreen() {
         source={require('./assets/logo/RunBound White.png')}
         style={styles.loadingLogo}
       />
-      <ActivityIndicator size="large" color="#52FF30" style={styles.spinner} />
+      <ActivityIndicator size="large" color="#4FB9FF" style={styles.spinner} />
       <Text style={styles.loadingText}>Loading RunBound...</Text>
     </View>
   );
@@ -68,11 +68,11 @@ function RootStack() {
               />
             </View>
             <TouchableOpacity style={styles.addButton}>
-              <Ionicons name="add" size={18} color="#fff" />
+              <Ionicons name="add" size={18} color="#5B3A00" />
             </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.chatButton}>
-            <Ionicons name="chatbubble-outline" size={28} color="#fff" />
+            <Ionicons name="chatbubble-outline" size={26} color="#684D12" />
           </TouchableOpacity>
         </View>
       );
@@ -81,17 +81,19 @@ function RootStack() {
     return (
       <Tab.Navigator
         screenOptions={{
-          tabBarInactiveBackgroundColor: '#252525',
-          tabBarActiveBackgroundColor: '#252525',
-          tabBarActiveTintColor: '#52FF30',
+          tabBarInactiveBackgroundColor: '#FFF8EE',
+          tabBarActiveBackgroundColor: '#FFF8EE',
+          tabBarInactiveTintColor: '#B99A67',
+          tabBarActiveTintColor: '#F2A12D',
           tabBarStyle: {
-            backgroundColor: '#252525',
-            borderTopColor: '#252525',
-            height: 80,
+            backgroundColor: '#FFF8EE',
+            borderTopColor: '#F2E2C3',
+            height: 82,
             paddingTop: 7,
+            paddingBottom: 8,
           },
-          headerTitleStyle: { color: '#FFFFFF' },
-          headerStyle: { backgroundColor: '#252525' },
+          headerTitleStyle: { color: '#4C3612', fontWeight: '800' },
+          headerStyle: { backgroundColor: '#FFF7E9' },
         }}
       >
         <Tab.Screen
@@ -147,7 +149,7 @@ function RootStack() {
 
   return (
     <>
-      <StatusBar barStyle="light-content" showHideTransition="slide" />
+      <StatusBar barStyle="dark-content" showHideTransition="slide" />
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -196,7 +198,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#252525',
+    backgroundColor: '#FFF7E9',
     paddingTop: 60,
     height: 100,
     flexDirection: 'row',
@@ -211,11 +213,16 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#000',
+    backgroundColor: '#FFFDF8',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#252525',
+    borderColor: '#FFF7E9',
+    shadowColor: '#E4C992',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+    elevation: 7,
   },
   headerLogo: {
     width: 40,
@@ -228,11 +235,11 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 20,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#FFD98A',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#252525',
+    borderColor: '#FFF7E9',
   },
   chatButton: {
     position: 'absolute',
@@ -243,7 +250,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#FFF8EE',
   },
   loadingLogo: {
     width: 100,
@@ -254,8 +261,9 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   loadingText: {
-    color: '#888',
+    color: '#9A8662',
     marginTop: 10,
     fontSize: 14,
+    fontWeight: '600',
   },
 });

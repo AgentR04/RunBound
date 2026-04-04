@@ -41,20 +41,20 @@ function getStatusAccent(status: TerritoryIntel['status']) {
   switch (status) {
     case 'owned':
       return {
-        background: '#103C37',
-        color: '#29F0D7',
+        background: 'rgba(96, 198, 118, 0.18)',
+        color: '#60C676',
         icon: 'shield-outline',
       };
     case 'contested':
       return {
-        background: '#56420B',
-        color: '#FFD34D',
+        background: 'rgba(247, 183, 51, 0.2)',
+        color: '#D7931E',
         icon: 'flame-outline',
       };
     default:
       return {
-        background: '#4A2416',
-        color: '#FF7A45',
+        background: 'rgba(255, 139, 94, 0.16)',
+        color: '#FF8B5E',
         icon: 'warning-outline',
       };
   }
@@ -156,7 +156,7 @@ export default function TerritoryIntelSheet({
 
           <View style={styles.detailRow}>
             <View style={styles.detailPill}>
-              <Icon name="walk-outline" size={14} color="#FFD34D" />
+              <Icon name="walk-outline" size={14} color="#D7931E" />
               <Text style={styles.detailText}>
                 Any valid loop can carve a new blob
               </Text>
@@ -165,13 +165,13 @@ export default function TerritoryIntelSheet({
 
           <View style={styles.actionRow}>
             <TouchableOpacity style={styles.secondaryButton} onPress={onViewOwner}>
-              <Icon name="person-circle-outline" size={18} color="#E3E9F5" />
+              <Icon name="person-circle-outline" size={18} color="#57718D" />
               <Text style={styles.secondaryButtonText}>Owner</Text>
             </TouchableOpacity>
 
             {selectedTerritory.status === 'owned' ? (
               <TouchableOpacity style={styles.primaryButtonDisabled} disabled>
-                <Icon name="shield-outline" size={18} color="#172027" />
+                <Icon name="shield-outline" size={18} color="#7A9AB8" />
                 <Text style={styles.primaryButtonTextMuted}>Fortified</Text>
               </TouchableOpacity>
             ) : (
@@ -179,7 +179,7 @@ export default function TerritoryIntelSheet({
                 style={styles.primaryButton}
                 onPress={onChallengeTerritory}
               >
-                <Icon name="flash-outline" size={18} color="#101114" />
+                <Icon name="flash-outline" size={18} color="#0D4D7A" />
                 <Text style={styles.primaryButtonText}>Challenge</Text>
               </TouchableOpacity>
             )}
@@ -210,7 +210,7 @@ export default function TerritoryIntelSheet({
           </View>
 
           <TouchableOpacity style={styles.primaryButton} onPress={onStartRun}>
-            <Icon name="walk-outline" size={18} color="#101114" />
+            <Icon name="walk-outline" size={18} color="#0D4D7A" />
             <Text style={styles.primaryButtonText}>Start Run</Text>
           </TouchableOpacity>
         </View>
@@ -232,30 +232,28 @@ const styles = StyleSheet.create({
   metricCard: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'rgba(7, 11, 20, 0.88)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     borderRadius: 18,
     paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   metricValue: {
-    color: '#F7F8FC',
+    color: '#2A4361',
     fontSize: 18,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
   },
   metricLabel: {
-    color: '#9EA8BF',
+    color: '#8096AF',
     fontSize: 11,
     marginTop: 2,
     textTransform: 'uppercase',
   },
   intelCard: {
-    backgroundColor: 'rgba(13, 18, 30, 0.98)',
+    backgroundColor: 'rgba(255, 250, 243, 0.96)',
     borderRadius: 26,
     padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 211, 77, 0.14)',
+    borderColor: 'rgba(242, 220, 182, 0.65)',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -263,14 +261,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionEyebrow: {
-    color: '#FFD34D',
+    color: '#D58A15',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   territoryName: {
-    color: '#F8FAFE',
+    color: '#2A4361',
     fontSize: 27,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
@@ -298,14 +296,14 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: '#10202B',
+    backgroundColor: '#F2FAFF',
     borderWidth: 1,
-    borderColor: 'rgba(41, 240, 215, 0.5)',
+    borderColor: 'rgba(87, 184, 255, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   ownerAvatarText: {
-    color: '#DFFBFF',
+    color: '#2A4361',
     fontSize: 14,
     fontWeight: '900',
   },
@@ -314,129 +312,113 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   ownerTitle: {
-    color: '#EFF4FF',
+    color: '#2A4361',
     fontSize: 16,
     fontWeight: '800',
   },
   ownerSubtitle: {
-    color: '#98A6C0',
+    color: '#7990AB',
     fontSize: 12,
-    marginTop: 3,
-    lineHeight: 18,
+    marginTop: 2,
   },
   rewardGrid: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 18,
+    marginTop: 16,
   },
   rewardCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    borderRadius: 18,
+    paddingVertical: 13,
+    backgroundColor: '#F6FAFF',
   },
   rewardValue: {
-    color: '#F9FBFF',
-    fontSize: 17,
+    color: '#2A4361',
+    fontSize: 16,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
   },
   rewardLabel: {
-    color: '#98A6C0',
+    color: '#7D93AC',
     fontSize: 11,
     marginTop: 3,
     textTransform: 'uppercase',
   },
   detailRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 14,
+    marginTop: 16,
   },
   detailPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    gap: 8,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#FFF6E6',
   },
   detailText: {
-    color: '#E6EDF9',
-    fontSize: 12,
-    fontWeight: '700',
+    flex: 1,
+    color: '#7A90A9',
+    fontSize: 13,
+    fontWeight: '600',
   },
   actionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 18,
+    marginTop: 16,
   },
   secondaryButton: {
     flex: 1,
-    height: 54,
+    height: 52,
     borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: '#F3F8FF',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
     gap: 8,
   },
   secondaryButtonText: {
-    color: '#E3E9F5',
+    color: '#56718D',
     fontSize: 14,
     fontWeight: '800',
   },
   primaryButton: {
-    flex: 1.2,
-    height: 54,
+    flex: 1,
+    height: 52,
     borderRadius: 18,
-    backgroundColor: '#FFD34D',
-    borderWidth: 2,
-    borderColor: '#FFEEA9',
+    backgroundColor: '#AEE4FF',
+    borderWidth: 1,
+    borderColor: '#D3F0FF',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
     gap: 8,
-    shadowColor: '#FFD34D',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 6,
   },
   primaryButtonDisabled: {
-    flex: 1.2,
-    height: 54,
+    flex: 1,
+    height: 52,
     borderRadius: 18,
-    backgroundColor: '#5E6A73',
-    borderWidth: 2,
-    borderColor: '#8898A3',
+    backgroundColor: '#ECF2F8',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
     gap: 8,
-    opacity: 0.8,
   },
   primaryButtonText: {
-    color: '#101114',
-    fontSize: 15,
+    color: '#0D4D7A',
+    fontSize: 14,
     fontWeight: '900',
-    textTransform: 'uppercase',
   },
   primaryButtonTextMuted: {
-    color: '#172027',
-    fontSize: 15,
-    fontWeight: '900',
-    textTransform: 'uppercase',
+    color: '#7A9AB8',
+    fontSize: 14,
+    fontWeight: '800',
   },
   summaryText: {
-    color: '#A3ADC2',
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 12,
+    marginTop: 10,
+    color: '#7A90A9',
+    fontSize: 14,
+    lineHeight: 21,
   },
 });
