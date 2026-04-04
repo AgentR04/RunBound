@@ -26,7 +26,7 @@ import {
   getTerritories,
   getUser,
 } from '../utils/storage';
-import { TITLE_FONT, UI_FONT } from '../theme/fonts';
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 function StatTile({
   icon,
@@ -567,7 +567,6 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#D9E6F3',
     fontSize: 12,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   signOutButton: {
@@ -663,7 +662,6 @@ const styles = StyleSheet.create({
   progressLabel: {
     color: '#9AB5D1',
     fontSize: 12,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   progressTrack: {
@@ -714,7 +712,7 @@ const styles = StyleSheet.create({
   statValue: {
     color: '#F4F8FF',
     fontSize: 30,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   statUnit: {
     color: '#9AB5D1',
@@ -749,7 +747,6 @@ const styles = StyleSheet.create({
   sectionMeta: {
     color: '#9AB5D1',
     fontSize: 12,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   badgeGrid: {
@@ -812,7 +809,7 @@ const styles = StyleSheet.create({
   rankBubbleText: {
     fontSize: 12,
     fontWeight: '800',
-    fontFamily: UI_FONT,
+    fontFamily: STAT_FONT,
   },
   leaderAvatar: {
     width: 56,
@@ -845,7 +842,7 @@ const styles = StyleSheet.create({
     color: '#F4F8FF',
     fontSize: 18,
     marginTop: 12,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   listWrap: {
     borderRadius: 20,
@@ -894,7 +891,7 @@ const styles = StyleSheet.create({
     color: '#F4F8FF',
     fontSize: 13,
     fontWeight: '800',
-    fontFamily: UI_FONT,
+    fontFamily: STAT_FONT,
   },
   emptyText: {
     color: '#9AB5D1',

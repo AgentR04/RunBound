@@ -28,6 +28,7 @@ import TacticalHud from '../components/map/TacticalHud';
 import TerritoryIntelSheet from '../components/map/TerritoryIntelSheet';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
 import {
   claimTerritory as apiClaimTerritory,
   fetchTerritories,
@@ -69,11 +70,6 @@ const DEFAULT_MUMBAI_REGION = {
 const FALLBACK_USER_ID = 'user-1';
 const FALLBACK_USER_NAME = 'Aarav';
 const DECAY_WINDOW_HOURS = 7 * 24;
-const HEADER_FONT = Platform.select({
-  ios: 'AvenirNextCondensed-Heavy',
-  android: 'sans-serif-condensed',
-  default: undefined,
-});
 const TACTICAL_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#EDF7FF' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#5F7A97' }] },
@@ -790,6 +786,10 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     );
   };
 
+  const handleOpenPowerups = () => {
+    navigation.navigate('Powerups');
+  };
+
   const handleSelectMapType = (type: 'standard' | 'satellite' | 'hybrid') => {
     setMapType(type);
     setShowMapTypeOverlay(false);
@@ -986,7 +986,6 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   };
 
   const steps = estimateSteps(activeRun.distance);
-  const calories = getSafeCalories();
   const startFabBottom = Animated.add(sheetHeight, 16);
   const pulseScale = conquestPulse.interpolate({
     inputRange: [0, 1],
@@ -1598,23 +1597,14 @@ const RunMap = ({ navigation }: { navigation: any }) => {
               onViewOwner={handleViewOwnerProfile}
             />
 
-            <View style={styles.quickStatsRow}>
-              <View style={styles.quickStatCard}>
-                <Icon name="flame-outline" size={18} color="#FF7A45" />
-                <Text style={styles.quickStatValue}>{calories}</Text>
-                <Text style={styles.quickStatLabel}>KCAL</Text>
-              </View>
-              <View style={styles.quickStatCard}>
-                <Icon name="footsteps-outline" size={18} color="#FFD34D" />
-                <Text style={styles.quickStatValue}>{steps}</Text>
-                <Text style={styles.quickStatLabel}>STEPS</Text>
-              </View>
-              <View style={styles.quickStatCard}>
-                <Icon name="shield-outline" size={18} color="#29F0D7" />
-                <Text style={styles.quickStatValue}>{ownedTerritories}</Text>
-                <Text style={styles.quickStatLabel}>HELD</Text>
-              </View>
-            </View>
+            <TouchableOpacity
+              style={styles.powerupsButton}
+              onPress={handleOpenPowerups}
+            >
+              <Icon name="flash-outline" size={20} color="#FFF1D8" />
+              <Text style={styles.powerupsButtonText}>Get Powerups</Text>
+              <Icon name="chevron-forward" size={18} color="#FFF1D8" />
+            </TouchableOpacity>
           </ScrollView>
         )}
       </Animated.View>
@@ -1686,6 +1676,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.6,
+    fontFamily: UI_FONT,
   },
   overlayChipsContent: {
     gap: 8,
@@ -1719,7 +1710,7 @@ const styles = StyleSheet.create({
   filterChipText: {
     color: '#D5E5F4',
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   filterChipTextDark: {
     color: '#67E6FF',
@@ -1753,6 +1744,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     textTransform: 'uppercase',
     marginBottom: 8,
+    fontFamily: UI_FONT,
   },
   legendItems: {
     flexDirection: 'row',
@@ -1787,7 +1779,7 @@ const styles = StyleSheet.create({
   legendText: {
     color: '#DAE8F5',
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   mapControls: {
     position: 'absolute',
@@ -1845,6 +1837,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     letterSpacing: 1.4,
+    fontFamily: UI_FONT,
   },
   loopReadyBanner: {
     position: 'absolute',
@@ -1864,7 +1857,7 @@ const styles = StyleSheet.create({
   loopReadyText: {
     color: '#121417',
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: UI_FONT,
   },
   markerWrapper: {
     width: 34,
@@ -1912,13 +1905,13 @@ const styles = StyleSheet.create({
   captureTitle: {
     color: '#8C651B',
     fontSize: 16,
-    fontWeight: '900',
-    fontFamily: HEADER_FONT,
+    fontFamily: TITLE_FONT,
   },
   captureSubtitle: {
     color: '#6E89A5',
     fontSize: 12,
     marginTop: 2,
+    fontFamily: UI_FONT,
   },
   overlayBackdrop: {
     flex: 1,
@@ -1945,8 +1938,7 @@ const styles = StyleSheet.create({
   overlayTitle: {
     color: '#2A4361',
     fontSize: 24,
-    fontWeight: '900',
-    fontFamily: HEADER_FONT,
+    fontFamily: TITLE_FONT,
   },
   overlaySection: {
     paddingHorizontal: 18,
@@ -1972,7 +1964,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#5F7997',
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   mapTypeTextActive: {
     color: '#8C651B',
@@ -2007,6 +1999,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   bottomSheetHeaderRow: {
     width: '100%',
@@ -2029,33 +2022,23 @@ const styles = StyleSheet.create({
   sheetScroll: {
     flex: 1,
   },
-  quickStatsRow: {
+  powerupsButton: {
+    height: 54,
+    marginHorizontal: 18,
+    marginBottom: 42,
+    borderRadius: 18,
+    backgroundColor: '#A61C28',
+    borderWidth: 1,
+    borderColor: '#D74B5B',
     flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 18,
-    paddingBottom: 42,
-  },
-  quickStatCard: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 18,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(103, 230, 255, 0.12)',
+    gap: 10,
   },
-  quickStatValue: {
-    color: '#F3F8FF',
-    fontSize: 17,
-    fontWeight: '900',
-    fontFamily: HEADER_FONT,
-    marginTop: 4,
-  },
-  quickStatLabel: {
-    color: '#8EB5D8',
-    fontSize: 11,
-    marginTop: 2,
+  powerupsButtonText: {
+    color: '#FFF1D8',
+    fontSize: 15,
+    fontFamily: UI_FONT,
   },
 });
 

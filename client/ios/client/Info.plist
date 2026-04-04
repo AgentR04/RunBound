@@ -29,6 +29,8 @@
 	<key>UIAppFonts</key>
 	<array>
 		<string>AVENGEANCE HEROIC AVENGER.ttf</string>
+		<string>BebasNeue-Regular.ttf</string>
+		<string>Oswald.ttf</string>
 		<string>Orbitron-VariableFont_wght.ttf</string>
 	</array>
 	<key>NSAppTransportSecurity</key>

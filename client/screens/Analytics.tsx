@@ -23,7 +23,7 @@ import ActivityStorage, {
   AnalyticsData,
 } from '../services/ActivityStorage';
 import AchievementService, { Achievement } from '../services/AchievementService';
-import { TITLE_FONT, UI_FONT } from '../theme/fonts';
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
 import {
   calculateConsistencyScore,
   calculateIntensityScore,
@@ -526,7 +526,6 @@ const styles = StyleSheet.create({
   loadingText: {
     color: '#D6E3F2',
     fontSize: 16,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   scrollView: {
@@ -597,7 +596,7 @@ const styles = StyleSheet.create({
   heroStatValue: {
     color: '#F3F8FF',
     fontSize: 20,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   heroStatLabel: {
     color: '#9AB5D1',
@@ -626,7 +625,6 @@ const styles = StyleSheet.create({
   timeframeButtonText: {
     color: '#9AB5D1',
     fontSize: 14,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   timeframeButtonTextActive: {
@@ -680,7 +678,7 @@ const styles = StyleSheet.create({
   progressRingValue: {
     color: '#F4F8FF',
     fontSize: 16,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   progressRingLabel: {
     color: '#9AB5D1',
@@ -766,7 +764,7 @@ const styles = StyleSheet.create({
     color: '#9AB5D1',
     fontSize: 10,
     minWidth: 30,
-    fontFamily: UI_FONT,
+    fontFamily: STAT_FONT,
   },
   achievementUnlockedDate: {
     color: '#9AB5D1',

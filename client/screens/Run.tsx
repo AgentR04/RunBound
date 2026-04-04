@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../components/ui/GlassPanel';
-import { TITLE_FONT, UI_FONT } from '../theme/fonts';
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 const RUN_PROGRAMS = [
   {
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   heroStatValue: {
     color: '#F3F8FF',
     fontSize: 22,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   heroStatLabel: {
     marginTop: 2,
@@ -203,7 +203,6 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: '#FFF1D8',
     fontSize: 15,
-    fontWeight: '900',
     fontFamily: UI_FONT,
   },
   sectionTitle: {
@@ -253,7 +252,6 @@ const styles = StyleSheet.create({
   programRewardText: {
     color: '#F5C15D',
     fontSize: 12,
-    fontWeight: '800',
     fontFamily: UI_FONT,
   },
 });

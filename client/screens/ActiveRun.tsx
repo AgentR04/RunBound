@@ -36,7 +36,7 @@ import {
   isNearStartPoint,
   simplifyPolygon,
 } from '../utils/territoryUtils';
-import { TITLE_FONT, UI_FONT } from '../theme/fonts';
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 const DropMarker = require('../src/components/run/DropMarker').default;
 const DropsHUD = require('../src/components/run/DropsHUD').default;
@@ -950,7 +950,6 @@ const styles = StyleSheet.create({
   signalPillText: {
     color: '#5F7996',
     fontSize: 12,
-    fontWeight: '800',
     fontFamily: UI_FONT,
   },
   statsBar: {
@@ -975,7 +974,7 @@ const styles = StyleSheet.create({
   statValue: {
     color: '#2A4361',
     fontSize: 18,
-    fontFamily: HEADER_FONT,
+    fontFamily: STAT_FONT,
   },
   statLabel: {
     color: '#7990AB',
@@ -1059,7 +1058,6 @@ const styles = StyleSheet.create({
   drawerToggleText: {
     color: '#F5C15D',
     fontSize: 12,
-    fontWeight: '800',
     fontFamily: UI_FONT,
   },
   drawerHeader: {
@@ -1100,6 +1098,7 @@ const styles = StyleSheet.create({
     color: '#FFF1D8',
     fontSize: 14,
     fontWeight: '900',
+    fontFamily: STAT_FONT,
   },
   progressTrack: {
     marginTop: 16,
@@ -1130,7 +1129,7 @@ const styles = StyleSheet.create({
   drawerMetricValue: {
     color: '#F3F8FF',
     fontSize: 16,
-    fontFamily: HEADER_FONT,
+    fontFamily: STAT_FONT,
     marginTop: 4,
   },
   drawerMetricLabel: {

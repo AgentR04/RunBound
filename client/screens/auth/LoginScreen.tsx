@@ -15,7 +15,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../../components/ui/GlassPanel';
 import { useAuth } from '../../context/AuthContext';
-import { TITLE_FONT, UI_FONT } from '../../theme/fonts';
+import { BODY_FONT, TITLE_FONT, UI_FONT } from '../../theme/fonts';
 
 interface LoginScreenProps {
   navigation: any;
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
-    fontFamily: UI_FONT,
+    fontFamily: BODY_FONT,
   },
   formShell: {
     marginTop: 6,
@@ -244,6 +244,7 @@ const styles = StyleSheet.create({
     color: '#E8F1FA',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: BODY_FONT,
   },
   ctaButton: {
     marginTop: 6,
@@ -264,7 +265,6 @@ const styles = StyleSheet.create({
   ctaText: {
     color: '#FFF1D8',
     fontSize: 16,
-    fontWeight: '900',
     fontFamily: UI_FONT,
   },
   secondaryLink: {
@@ -274,7 +274,6 @@ const styles = StyleSheet.create({
   secondaryLinkText: {
     color: '#9AB5D1',
     fontSize: 13,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   footer: {
@@ -291,7 +290,6 @@ const styles = StyleSheet.create({
   footerLink: {
     color: '#F5C15D',
     fontSize: 14,
-    fontWeight: '900',
     fontFamily: UI_FONT,
   },
 });

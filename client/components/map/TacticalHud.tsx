@@ -1,12 +1,7 @@
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
-
-const HEADER_FONT = Platform.select({
-  ios: 'AvenirNextCondensed-Heavy',
-  android: 'sans-serif-condensed',
-  default: undefined,
-});
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../../theme/fonts';
 
 interface TacticalHudProps {
   playerName: string;
@@ -137,6 +132,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1.5,
+    fontFamily: UI_FONT,
   },
   topRow: {
     flexDirection: 'row',
@@ -150,12 +146,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.6,
+    fontFamily: UI_FONT,
   },
   playerName: {
     color: '#EFF7FF',
     fontSize: 24,
-    fontWeight: '900',
-    fontFamily: HEADER_FONT,
+    fontFamily: TITLE_FONT,
     letterSpacing: 0.6,
     marginTop: 2,
   },
@@ -187,13 +183,13 @@ const styles = StyleSheet.create({
   statValue: {
     color: '#F5FBFF',
     fontSize: 20,
-    fontWeight: '900',
-    fontFamily: HEADER_FONT,
+    fontFamily: STAT_FONT,
   },
   statLabel: {
     color: '#8EB5D8',
     fontSize: 11,
     marginTop: 2,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
 });

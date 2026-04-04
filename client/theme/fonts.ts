@@ -1,13 +1,21 @@
 import { Platform } from 'react-native';
 
 export const TITLE_FONT = Platform.select({
-  ios: 'Avengeance Heroic Avenger',
-  android: 'AvengeanceHeroicAvenger',
-  default: 'Avengeance Heroic Avenger',
+  ios: 'Bebas Neue',
+  android: 'BebasNeue',
+  default: 'Bebas Neue',
 });
 
-export const UI_FONT = Platform.select({
+export const STAT_FONT = Platform.select({
   ios: 'Orbitron',
   android: 'Orbitron',
   default: 'Orbitron',
 });
+
+export const BODY_FONT = Platform.select({
+  ios: 'Oswald',
+  android: 'Oswald',
+  default: 'Oswald',
+});
+
+export const UI_FONT = BODY_FONT;

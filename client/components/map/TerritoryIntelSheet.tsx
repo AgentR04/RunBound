@@ -1,5 +1,6 @@
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../../theme/fonts';
 
 export interface TerritoryIntel {
   id: string;
@@ -11,12 +12,6 @@ export interface TerritoryIntel {
   areaM2: number;
   strength: number;
 }
-
-const HEADER_FONT = Platform.select({
-  ios: 'AvenirNextCondensed-Heavy',
-  android: 'sans-serif-condensed',
-  default: undefined,
-});
 
 interface TerritoryIntelSheetProps {
   selectedTerritory: TerritoryIntel | null;
@@ -205,7 +200,10 @@ export default function TerritoryIntelSheet({
             </View>
           </View>
 
-          <TouchableOpacity style={styles.primaryButton} onPress={onStartRun}>
+          <TouchableOpacity
+            style={[styles.primaryButton, styles.summaryPrimaryButton]}
+            onPress={onStartRun}
+          >
             <Icon name="walk-outline" size={18} color="#FFF3E0" />
             <Text style={styles.primaryButtonText}>Assemble Run</Text>
           </TouchableOpacity>
@@ -238,13 +236,14 @@ const styles = StyleSheet.create({
     color: '#F5FBFF',
     fontSize: 18,
     fontWeight: '900',
-    fontFamily: HEADER_FONT,
+    fontFamily: STAT_FONT,
   },
   metricLabel: {
     color: '#8EB5D8',
     fontSize: 11,
     marginTop: 2,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   intelCard: {
     backgroundColor: 'rgba(10, 20, 36, 0.96)',
@@ -264,12 +263,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   territoryName: {
     color: '#F4F8FF',
     fontSize: 27,
-    fontWeight: '900',
-    fontFamily: HEADER_FONT,
+    fontFamily: TITLE_FONT,
     marginTop: 3,
   },
   statusBadge: {
@@ -284,6 +283,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   ownerRow: {
     flexDirection: 'row',
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   ownerAvatarText: {
     color: '#EAF7FF',
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: UI_FONT,
   },
   ownerMeta: {
     flex: 1,
@@ -312,12 +312,13 @@ const styles = StyleSheet.create({
   ownerTitle: {
     color: '#F4F8FF',
     fontSize: 16,
-    fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   ownerSubtitle: {
     color: '#9DB7D4',
     fontSize: 12,
     marginTop: 2,
+    fontFamily: UI_FONT,
   },
   rewardGrid: {
     flexDirection: 'row',
@@ -337,13 +338,14 @@ const styles = StyleSheet.create({
     color: '#F4F8FF',
     fontSize: 16,
     fontWeight: '900',
-    fontFamily: HEADER_FONT,
+    fontFamily: STAT_FONT,
   },
   rewardLabel: {
     color: '#8EB5D8',
     fontSize: 11,
     marginTop: 3,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   detailRow: {
     marginTop: 16,
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#DCE8F7',
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: UI_FONT,
   },
   actionRow: {
     flexDirection: 'row',
@@ -385,7 +387,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: '#C7D9EC',
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   primaryButton: {
     flex: 1,
@@ -414,12 +416,15 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: '#FFF3E0',
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: UI_FONT,
   },
   primaryButtonTextMuted: {
     color: '#8299B4',
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: UI_FONT,
+  },
+  summaryPrimaryButton: {
+    marginTop: 24,
   },
   summaryText: {
     marginTop: 10,

@@ -13,7 +13,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../../components/ui/GlassPanel';
-import { TITLE_FONT, UI_FONT } from '../../theme/fonts';
+import { BODY_FONT, TITLE_FONT, UI_FONT } from '../../theme/fonts';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     textAlign: 'center',
-    fontFamily: UI_FONT,
+    fontFamily: BODY_FONT,
   },
   badge: {
     marginTop: 22,
@@ -321,7 +321,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 13,
-    fontWeight: '800',
     fontFamily: UI_FONT,
   },
   statsList: {
@@ -348,7 +347,6 @@ const styles = StyleSheet.create({
   statText: {
     color: '#E7F1FB',
     fontSize: 15,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   bottomBar: {

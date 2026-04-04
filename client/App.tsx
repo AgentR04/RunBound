@@ -17,12 +17,13 @@ import ActiveRun from './screens/ActiveRun';
 import Feed from './screens/Feed';
 import Home from './screens/Home';
 import RunMap from './screens/Map';
+import Powerups from './screens/Powerups';
 import Profile from './screens/Profile';
 import Run from './screens/Run';
 import LoginScreen from './screens/auth/LoginScreen';
 import OnboardingScreen from './screens/auth/OnboardingScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
-import { TITLE_FONT, UI_FONT } from './theme/fonts';
+import { BODY_FONT, TITLE_FONT, UI_FONT } from './theme/fonts';
 
 function AuthStack() {
   const Stack = createNativeStackNavigator();
@@ -169,6 +170,14 @@ function RootStack() {
             animation: 'slide_from_bottom',
           }}
         />
+        <Stack.Screen
+          name="Powerups"
+          component={Powerups}
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+          }}
+        />
       </Stack.Navigator>
     </>
   );
@@ -270,6 +279,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 14,
     fontWeight: '600',
-    fontFamily: UI_FONT,
+    fontFamily: BODY_FONT,
   },
 });

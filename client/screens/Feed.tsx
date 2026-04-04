@@ -15,7 +15,7 @@ import GlassPanel from '../components/ui/GlassPanel';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { Activity, fetchActivities } from '../services/api';
-import { TITLE_FONT, UI_FONT } from '../theme/fonts';
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
 import { getRuns, getTerritories } from '../utils/storage';
 
 const MAX_FEED_ITEMS = 100;
@@ -384,7 +384,6 @@ const styles = StyleSheet.create({
   loadingText: {
     color: '#D6E3F2',
     fontSize: 14,
-    fontWeight: '600',
     fontFamily: UI_FONT,
   },
   headerWrap: {
@@ -443,7 +442,6 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#D7E5F2',
     fontSize: 12,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   heroStats: {
@@ -464,7 +462,7 @@ const styles = StyleSheet.create({
   heroStatValue: {
     color: '#F3F8FF',
     fontSize: 22,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   heroStatLabel: {
     color: '#9AB5D1',
@@ -493,7 +491,6 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#F2C0C6',
     fontSize: 13,
-    fontWeight: '600',
     fontFamily: UI_FONT,
   },
   listContent: {
@@ -568,7 +565,6 @@ const styles = StyleSheet.create({
   metaChipText: {
     color: '#C8D8E8',
     fontSize: 12,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   emptyShell: {

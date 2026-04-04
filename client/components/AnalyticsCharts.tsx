@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
-import { TITLE_FONT, UI_FONT } from '../theme/fonts';
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CHART_WIDTH = screenWidth - 48;
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     color: '#9AB5D1',
     fontSize: 12,
     fontWeight: '800',
-    fontFamily: UI_FONT,
+    fontFamily: STAT_FONT,
   },
   zoneTrack: {
     height: 12,
@@ -472,7 +472,6 @@ const styles = StyleSheet.create({
   noDataText: {
     color: '#9AB5D1',
     fontSize: 15,
-    fontWeight: '600',
     fontFamily: UI_FONT,
   },
   statCard: {
@@ -494,13 +493,12 @@ const styles = StyleSheet.create({
     color: '#9AB5D1',
     fontSize: 13,
     textTransform: 'uppercase',
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   statCardValue: {
     fontSize: 30,
     marginBottom: 4,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   statCardSubtitle: {
     color: '#9AB5D1',
@@ -512,7 +510,6 @@ const styles = StyleSheet.create({
   },
   trendText: {
     fontSize: 12,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   recordCard: {
@@ -547,14 +544,13 @@ const styles = StyleSheet.create({
   newRecordText: {
     color: '#FFF1D8',
     fontSize: 10,
-    fontWeight: '900',
     fontFamily: UI_FONT,
   },
   recordValue: {
     color: '#57B8FF',
     fontSize: 24,
     marginBottom: 4,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   recordDate: {
     color: '#9AB5D1',

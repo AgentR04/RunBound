@@ -11,7 +11,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../components/ui/GlassPanel';
 import { useAuth } from '../context/AuthContext';
-import { TITLE_FONT, UI_FONT } from '../theme/fonts';
+import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 function MiniStat({
   icon,
@@ -374,7 +374,6 @@ const styles = StyleSheet.create({
   pointsText: {
     color: '#F5C15D',
     fontSize: 11,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   headerBell: {
@@ -399,7 +398,6 @@ const styles = StyleSheet.create({
   heroBadgeText: {
     color: '#F5C15D',
     fontSize: 11,
-    fontWeight: '800',
     fontFamily: UI_FONT,
   },
   heroTitle: {
@@ -417,7 +415,7 @@ const styles = StyleSheet.create({
   heroValue: {
     color: '#F4FBFF',
     fontSize: 38,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   heroSubtitle: {
     color: '#A9C0D8',
@@ -451,7 +449,6 @@ const styles = StyleSheet.create({
   actionText: {
     color: '#FFF1D8',
     fontSize: 14,
-    fontWeight: '800',
     fontFamily: UI_FONT,
   },
   miniStatsRow: {
@@ -484,7 +481,7 @@ const styles = StyleSheet.create({
     color: '#F3F8FF',
     fontSize: 24,
     marginTop: 6,
-    fontFamily: TITLE_FONT,
+    fontFamily: STAT_FONT,
   },
   sectionShell: {},
   sectionCard: {
@@ -519,7 +516,6 @@ const styles = StyleSheet.create({
   sectionChipText: {
     color: '#67E6FF',
     fontSize: 11,
-    fontWeight: '700',
     fontFamily: UI_FONT,
   },
   missionRow: {
@@ -561,7 +557,6 @@ const styles = StyleSheet.create({
   missionRewardText: {
     color: '#F5C15D',
     fontSize: 11,
-    fontWeight: '800',
     fontFamily: UI_FONT,
   },
   linkButton: {
