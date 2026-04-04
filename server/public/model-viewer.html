@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    * { margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0b1622; }
+    canvas { display: block; }
+    #msg {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(255,255,255,0.8);
+      font: 16px -apple-system, sans-serif;
+      text-align: center;
+      pointer-events: none;
+    }
+    #tap-hint {
+      display: none;
+      position: fixed;
+      bottom: 110px; left: 0; right: 0;
+      text-align: center;
+      color: rgba(255,255,255,0.45);
+      font: 600 13px -apple-system, sans-serif;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="msg">Loading…</div>
+  <div id="tap-hint">Use Back to close</div>
+
+  <script src="/static/js/three.min.js"></script>
+  <script src="/static/js/GLTFLoader.js"></script>
+  <script>
+    var params   = new URLSearchParams(window.location.search);
+    var modelUrl = params.get('src') || '/static/models/capt_marvel.glb';
+
+    /* ── renderer ── */
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(devicePixelRatio);
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setClearColor(0x0b1622, 1);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    document.body.appendChild(renderer.domElement);
+
+    /* ── scene / camera ── */
+    var scene  = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 1000);
+    camera.position.set(0, 1.0, 4.0);
+    camera.lookAt(0, 0.5, 0);
+
+    /* ── lights ── */
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x223355, 2.2));
+    var sun = new THREE.DirectionalLight(0xffffff, 2.0);
+    sun.position.set(3, 6, 5);
+    scene.add(sun);
+    var rim = new THREE.DirectionalLight(0x88aaff, 0.8);
+    rim.position.set(-4, 2, -2);
+    scene.add(rim);
+
+    /* ── load model ── */
+    var root   = null;
+    var loader = new THREE.GLTFLoader();
+
+    loader.load(
+      modelUrl,
+      function (gltf) {
+        root = gltf.scene;
+
+        var box    = new THREE.Box3().setFromObject(root);
+        var size   = box.getSize(new THREE.Vector3());
+        var center = box.getCenter(new THREE.Vector3());
+        root.position.set(-center.x, -center.y, -center.z);
+        var scale  = 2.2 / Math.max(size.x, size.y, size.z, 0.001);
+        root.scale.setScalar(scale);
+
+        scene.add(root);
+        document.getElementById('msg').style.display = 'none';
+        document.getElementById('tap-hint').style.display = 'block';
+      },
+      function (xhr) {
+        if (xhr.total) {
+          document.getElementById('msg').textContent =
+            'Loading ' + Math.round(xhr.loaded / xhr.total * 100) + '%';
+        }
+      },
+      function (err) {
+        document.getElementById('msg').textContent = 'Error loading model';
+        console.error(err);
+      }
+    );
+
+    /* ── animate ── */
+    (function loop() {
+      requestAnimationFrame(loop);
+      if (root) root.rotation.y += 0.008;
+      renderer.render(scene, camera);
+    })();
+
+    window.addEventListener('resize', function () {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>

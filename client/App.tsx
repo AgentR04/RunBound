@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -24,6 +25,7 @@ import LoginScreen from './screens/auth/LoginScreen';
 import OnboardingScreen from './screens/auth/OnboardingScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
 import { BODY_FONT, TITLE_FONT, UI_FONT } from './theme/fonts';
+import { requestNotificationPermission } from './services/notifications';
 
 function AuthStack() {
   const Stack = createNativeStackNavigator();
@@ -186,6 +188,12 @@ function RootStack() {
 function AppNavigator() {
   const { isAuthenticated, isLoading, needsOnboarding, onboardingLoading, completeOnboarding } =
     useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      requestNotificationPermission();
+    }
+  }, [isAuthenticated]);
 
   if (isLoading || onboardingLoading) {
     return <LoadingScreen />;

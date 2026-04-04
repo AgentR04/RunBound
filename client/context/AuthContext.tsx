@@ -1,5 +1,6 @@
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { HeroAvatarId } from '../config/heroAvatars';
 import { supabase } from '../lib/supabase';
 import appStorage from '../services/appStorage';
 
@@ -24,7 +25,7 @@ interface AuthContextValue {
   ) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
-  completeOnboarding: () => Promise<void>;
+  completeOnboarding: (heroChoice?: HeroAvatarId | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -179,7 +180,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp(email, password, username);
   const logout = () => signOut();
 
-  const completeOnboarding = async (): Promise<void> => {
+  const completeOnboarding = async (
+    heroChoice?: HeroAvatarId | null,
+  ): Promise<void> => {
     if (!session?.user?.id) {
       setNeedsOnboarding(false);
       setOnboardingLoading(false);
@@ -187,6 +190,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      if (heroChoice) {
+        const { data, error } = await supabase.auth.updateUser({
+          data: { superhero: heroChoice },
+        });
+
+        if (error) {
+          logAuthError('updateUser superhero', error, {
+            userId: session.user.id,
+            heroChoice,
+          });
+          throw error;
+        }
+
+        if (data.user && session) {
+          setSession({
+            ...session,
+            user: data.user,
+          });
+        }
+      }
+
       await appStorage.removeItem(getOnboardingKey(session.user.id));
       setNeedsOnboarding(false);
     } catch (error) {

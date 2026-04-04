@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RunBound — Hero Viewer</title>
+  <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, sans-serif;
+      background: #0d1b2a;
+      color: #fff;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      margin-top: 24px;
+      font-size: 13px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.45);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin: 16px 0 0;
+    }
+
+    .tab {
+      padding: 8px 22px;
+      border-radius: 999px;
+      border: 1.5px solid rgba(255,255,255,0.15);
+      background: transparent;
+      color: rgba(255,255,255,0.5);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.4);
+      color: #fff;
+    }
+
+    model-viewer {
+      flex: 1;
+      width: 100%;
+      max-width: 500px;
+      background: transparent;
+      --poster-color: transparent;
+    }
+  </style>
+</head>
+<body>
+  <h1>⚡ Hero Viewer</h1>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchHero('capt_marvel', this)">Captain Marvel</button>
+    <button class="tab" onclick="switchHero('iron_man', this)">Iron Man</button>
+  </div>
+
+  <model-viewer
+    id="viewer"
+    src="/static/models/capt_marvel.glb"
+    auto-rotate
+    auto-rotate-delay="0"
+    rotation-per-second="30deg"
+    camera-controls
+    shadow-intensity="1">
+  </model-viewer>
+
+  <script>
+    const models = {
+      capt_marvel: '/static/models/capt_marvel.glb',
+      iron_man: '/static/models/iron_man.glb',
+    };
+
+    function switchHero(id, btn) {
+      document.getElementById('viewer').src = models[id];
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  </script>
+</body>
+</html>

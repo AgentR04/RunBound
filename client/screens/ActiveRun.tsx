@@ -37,6 +37,13 @@ import {
   simplifyPolygon,
 } from '../utils/territoryUtils';
 import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
+import {
+  cancelInactivityReminder,
+  notifyKmMilestone,
+  notifyRunComplete,
+  notifyTerritorySecured,
+  scheduleInactivityReminder,
+} from '../services/notifications';
 
 const DropMarker = require('../src/components/run/DropMarker').default;
 const DropsHUD = require('../src/components/run/DropsHUD').default;
@@ -242,6 +249,7 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const mapRef = useRef<MapView>(null);
   const ghostBannerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const milestonesHit = useRef<Set<number>>(new Set());
   const pickupTimeouts = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const didEmitRunStart = useRef(false);
   const ghostBannerOpacity = useRef(new Animated.Value(0)).current;
@@ -378,6 +386,18 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
     onRunUpdate(activeRun);
   }, [activeRun, onRunUpdate]);
 
+  // Km milestone notifications
+  useEffect(() => {
+    if (activeRun.state !== 'running') return;
+    const km = activeRun.distance;
+    for (const milestone of [0.5, 1, 2, 5, 10]) {
+      if (km >= milestone && !milestonesHit.current.has(milestone)) {
+        milestonesHit.current.add(milestone);
+        notifyKmMilestone(milestone);
+      }
+    }
+  }, [activeRun.distance, activeRun.state]);
+
   useEffect(() => {
     const startLocation = activeRun.path[0];
 
@@ -386,6 +406,7 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
     }
 
     didEmitRunStart.current = true;
+    cancelInactivityReminder();
     emitRunStarted({
       userId: runnerProfile.id,
       location: {
@@ -544,6 +565,8 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
           style: 'destructive',
           onPress: () => {
             emitRunEnded({ userId: runnerProfile.id });
+            notifyRunComplete(distance, rewardHud.coinsCollected ?? 0);
+            scheduleInactivityReminder();
             onStop();
             navigation.goBack();
           },
@@ -571,6 +594,8 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
 
     onClaim();
     emitRunEnded({ userId: runnerProfile.id });
+    notifyTerritorySecured(targetName ?? undefined);
+    scheduleInactivityReminder();
     navigation.goBack();
   };
 

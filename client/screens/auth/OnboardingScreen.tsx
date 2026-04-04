@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import HeroAvatar from '../../components/avatar/HeroAvatar';
+import { HERO_AVATARS, HeroAvatarId, isHeroAvatarId } from '../../config/heroAvatars';
+import { useAuth } from '../../context/AuthContext';
 import GlassPanel from '../../components/ui/GlassPanel';
 import { BODY_FONT, TITLE_FONT, UI_FONT } from '../../theme/fonts';
 
@@ -69,13 +72,19 @@ const PANELS = [
 ] as const;
 
 interface OnboardingScreenProps {
-  onComplete: () => Promise<void>;
+  onComplete: (heroChoice?: HeroAvatarId | null) => Promise<void>;
 }
 
 const OnboardingScreen = ({ onComplete }: OnboardingScreenProps) => {
+  const { user } = useAuth();
   const scrollRef = useRef<ScrollView | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedHero, setSelectedHero] = useState<HeroAvatarId | null>(
+    isHeroAvatarId(user?.user_metadata?.superhero)
+      ? user.user_metadata.superhero
+      : 'capt_marvel',
+  );
 
   const currentPanel = useMemo(() => PANELS[currentIndex], [currentIndex]);
   const isLastPanel = currentIndex === PANELS.length - 1;
@@ -103,7 +112,7 @@ const OnboardingScreen = ({ onComplete }: OnboardingScreenProps) => {
 
     setSubmitting(true);
     try {
-      await onComplete();
+      await onComplete(selectedHero);
     } finally {
       setSubmitting(false);
     }
@@ -179,6 +188,55 @@ const OnboardingScreen = ({ onComplete }: OnboardingScreenProps) => {
                       </View>
                     ))}
                   </View>
+
+                  {panel.id === 'ready' ? (
+                    <View style={styles.heroChoiceSection}>
+                      <Text style={styles.heroChoiceTitle}>Choose your hero avatar</Text>
+                      <Text style={styles.heroChoiceSubtitle}>
+                        Pick Captain Marvel or Iron Man to represent your command profile.
+                      </Text>
+                      <View style={styles.heroChoiceRow}>
+                        {Object.values(HERO_AVATARS).map(hero => {
+                          const isSelected = selectedHero === hero.id;
+
+                          return (
+                            <TouchableOpacity
+                              key={hero.id}
+                              style={[
+                                styles.heroOption,
+                                isSelected && {
+                                  borderColor: hero.accent,
+                                  backgroundColor: `${hero.accent}12`,
+                                },
+                              ]}
+                              activeOpacity={0.9}
+                              onPress={() => setSelectedHero(hero.id)}
+                            >
+                              <HeroAvatar heroId={hero.id} size={82} fallbackText={hero.badge} />
+                              <Text style={styles.heroOptionLabel}>{hero.label}</Text>
+                              <View
+                                style={[
+                                  styles.heroOptionBadge,
+                                  isSelected && {
+                                    backgroundColor: hero.accent,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.heroOptionBadgeText,
+                                    isSelected && styles.heroOptionBadgeTextActive,
+                                  ]}
+                                >
+                                  {isSelected ? 'Selected' : 'Tap to choose'}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : null}
                 </LinearGradient>
               </GlassPanel>
             </View>
@@ -327,6 +385,58 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 28,
     gap: 12,
+  },
+  heroChoiceSection: {
+    width: '100%',
+    marginTop: 18,
+  },
+  heroChoiceTitle: {
+    color: '#2A4361',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  heroChoiceSubtitle: {
+    marginTop: 6,
+    color: '#728CAA',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  heroChoiceRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  heroOption: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(214, 228, 239, 0.92)',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+  },
+  heroOptionLabel: {
+    marginTop: 10,
+    color: '#36506D',
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  heroOptionBadge: {
+    marginTop: 8,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#EDF4FB',
+  },
+  heroOptionBadgeText: {
+    color: '#6F86A0',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  heroOptionBadgeTextActive: {
+    color: '#FFFFFF',
   },
   statRow: {
     flexDirection: 'row',

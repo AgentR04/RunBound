@@ -12,6 +12,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../components/ui/GlassPanel';
 import { useAuth } from '../context/AuthContext';
 import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
+import { sendTestNotification } from '../services/notifications';
 
 function MiniStat({
   icon,
@@ -151,7 +152,7 @@ const Home = ({ navigation }: any) => {
                 </View>
               </View>
             </View>
-            <TouchableOpacity style={styles.headerBell}>
+            <TouchableOpacity style={styles.headerBell} onPress={sendTestNotification}>
               <Ionicons name="notifications-outline" size={20} color="#F5C15D" />
             </TouchableOpacity>
           </LinearGradient>
