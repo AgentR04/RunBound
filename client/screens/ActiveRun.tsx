@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  Dimensions,
   Platform,
   StatusBar,
   StyleSheet,
@@ -15,13 +14,10 @@ import { ActiveRun as ActiveRunType } from '../types/game';
 import {
   calculateCalories,
   calculatePace,
-  calculatePathDistance,
   calculateSpeed,
   LocationPoint,
 } from '../utils/gpsTracking';
 import { isNearStartPoint } from '../utils/territoryUtils';
-
-const { width, height } = Dimensions.get('window');
 
 interface ActiveRunScreenProps {
   navigation: any;
@@ -81,7 +77,7 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({ navigation, route }) 
         500,
       );
     }
-  }, [activeRun.path]);
+  }, [activeRun.path, activeRun.state]);
 
   const formatTime = (seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
@@ -210,8 +206,8 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({ navigation, route }) 
           provider={PROVIDER_GOOGLE}
           style={styles.map}
           initialRegion={{
-            latitude: activeRun.path[0]?.latitude || 40.6782,
-            longitude: activeRun.path[0]?.longitude || -73.9442,
+            latitude: activeRun.path[0]?.latitude || 19.076,
+            longitude: activeRun.path[0]?.longitude || 72.8777,
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           }}

@@ -14,8 +14,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { Circle, Polygon, Polyline, Region } from 'react-native-maps';
+import LinearGradient from 'react-native-linear-gradient';
+import MapView, {
+  Circle,
+  Marker,
+  Polygon,
+  Polyline,
+  PROVIDER_GOOGLE,
+  Region,
+} from 'react-native-maps';
 import Icon from 'react-native-vector-icons/Ionicons';
+import TacticalHud from '../components/map/TacticalHud';
+import TerritoryIntelSheet from '../components/map/TerritoryIntelSheet';
+import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import {
   claimTerritory as apiClaimTerritory,
@@ -31,22 +42,214 @@ import {
 } from '../utils/gpsTracking';
 import { getMockTerritories } from '../utils/mockTerritories';
 import { saveRun, saveTerritory, updateUserStats } from '../utils/storage';
-import { isNearStartPoint, isValidTerritory } from '../utils/territoryUtils';
 import {
-  DEFAULT_GRID_CELL_SIZE_METERS,
-  getGridCellsForPolygon,
-} from '../utils/territoryUtilsNew';
+  calculatePolygonArea,
+  getPolygonCenter,
+  isNearStartPoint,
+  isValidTerritory,
+  simplifyPolygon,
+} from '../utils/territoryUtils';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const COLLAPSED_HEIGHT = 200;
-const HALF_HEIGHT = SCREEN_HEIGHT * 0.5;
-const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.85;
-const CURRENT_USER_ID = 'user-1';
+const COLLAPSED_HEIGHT = 270;
+const HALF_HEIGHT = SCREEN_HEIGHT * 0.52;
+const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.83;
+const DEFAULT_MUMBAI_REGION = {
+  latitude: 19.076,
+  longitude: 72.8777,
+  latitudeDelta: 0.01,
+  longitudeDelta: 0.01,
+};
+const FALLBACK_USER_ID = 'user-1';
+const FALLBACK_USER_NAME = 'Aarav';
+const DECAY_WINDOW_HOURS = 7 * 24;
+const HEADER_FONT = Platform.select({
+  ios: 'AvenirNextCondensed-Heavy',
+  android: 'sans-serif-condensed',
+  default: undefined,
+});
+const TACTICAL_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#08111A' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#ADC2D4' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#050A10' }] },
+  {
+    featureType: 'administrative',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#112331' }],
+  },
+  {
+    featureType: 'landscape',
+    elementType: 'geometry',
+    stylers: [{ color: '#09131D' }],
+  },
+  {
+    featureType: 'poi',
+    elementType: 'geometry',
+    stylers: [{ color: '#0B1823' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry',
+    stylers: [{ color: '#183040' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry',
+    stylers: [{ color: '#224054' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'geometry',
+    stylers: [{ color: '#050E16' }],
+  },
+];
+
+type CaptureCelebration = {
+  title: string;
+  subtitle: string;
+};
+
+type TerritoryStatus = 'owned' | 'enemy' | 'contested';
+
+type TerritoryDisplay = {
+  territory: Territory;
+  center: LocationPoint;
+  name: string;
+  status: TerritoryStatus;
+  daysHeld: number;
+  decayHoursRemaining: number;
+};
+
+const TERRITORY_NAME_PREFIXES = [
+  'Bandra',
+  'Dadar',
+  'Worli',
+  'Colaba',
+  'Powai',
+  'Andheri',
+  'Mahim',
+  'Versova',
+];
+const TERRITORY_NAME_SUFFIXES = [
+  'Seaface',
+  'Maidan',
+  'Naka',
+  'Marg',
+  'Khadi',
+  'Depot',
+  'Chowk',
+  'Point',
+];
+
+function hashString(input: string) {
+  let hash = 0;
+
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) % 2147483647;
+  }
+
+  return Math.abs(hash);
+}
+
+function getPlayerRankTitle(ownedTerritories: number, totalDistanceKm: number) {
+  if (ownedTerritories >= 40 || totalDistanceKm >= 200) {
+    return 'Overlord';
+  }
+
+  if (ownedTerritories >= 18 || totalDistanceKm >= 90) {
+    return 'Warlord';
+  }
+
+  if (ownedTerritories >= 8 || totalDistanceKm >= 30) {
+    return 'Captain';
+  }
+
+  return 'Scout';
+}
+
+function getTerritoryName(territory: Territory) {
+  const hash = hashString(territory.id);
+  const prefix = TERRITORY_NAME_PREFIXES[hash % TERRITORY_NAME_PREFIXES.length];
+  const suffix =
+    TERRITORY_NAME_SUFFIXES[
+      Math.floor(hash / 7) % TERRITORY_NAME_SUFFIXES.length
+    ];
+  return `${prefix} ${suffix}`;
+}
+
+function getTerritoryStatus(
+  territory: Territory,
+  currentUserId: string,
+): TerritoryStatus {
+  if (territory.isUnderChallenge) {
+    return 'contested';
+  }
+
+  return territory.ownerId === currentUserId ? 'owned' : 'enemy';
+}
+
+function getTerritoryPalette(
+  status: TerritoryStatus,
+  isSelected: boolean,
+  isOwnedByCurrentUser: boolean,
+) {
+  const selectedStroke = isSelected ? '#FFF1AE' : undefined;
+
+  if (status === 'owned') {
+    return {
+      fill: isOwnedByCurrentUser
+        ? 'rgba(41, 240, 215, 0.34)'
+        : 'rgba(41, 240, 215, 0.2)',
+      stroke: selectedStroke || '#2AF0D8',
+      strokeWidth: isOwnedByCurrentUser ? 4.5 : 3.2,
+      marker: '#29F0D7',
+      markerBg: '#0E3B36',
+    };
+  }
+
+  if (status === 'contested') {
+    return {
+      fill: 'rgba(255, 211, 77, 0.24)',
+      stroke: selectedStroke || '#FFD34D',
+      strokeWidth: 3.4,
+      marker: '#FFD34D',
+      markerBg: '#52410A',
+    };
+  }
+
+  return {
+    fill: 'rgba(255, 122, 69, 0.18)',
+    stroke: selectedStroke || '#FF7A45',
+    strokeWidth: 2.5,
+    marker: '#FF7A45',
+    markerBg: '#4B2417',
+  };
+}
+
+function isPointInsideRegion(point: LocationPoint, region: Region) {
+  const latitudeMin = region.latitude - region.latitudeDelta;
+  const latitudeMax = region.latitude + region.latitudeDelta;
+  const longitudeMin = region.longitude - region.longitudeDelta;
+  const longitudeMax = region.longitude + region.longitudeDelta;
+
+  return (
+    point.latitude >= latitudeMin &&
+    point.latitude <= latitudeMax &&
+    point.longitude >= longitudeMin &&
+    point.longitude <= longitudeMax
+  );
+}
 
 const RunMap = ({ navigation }: { navigation: any }) => {
   const { socket } = useSocket();
+  const { user } = useAuth();
 
-  // === ALL useState HOOKS ===
+  const currentUserId = user?.id ?? FALLBACK_USER_ID;
+  const currentUserName =
+    user?.user_metadata?.username ??
+    user?.email?.split('@')[0] ??
+    FALLBACK_USER_NAME;
+
   const [activeRun, setActiveRun] = useState<ActiveRun>({
     state: 'idle',
     startTime: null,
@@ -61,52 +264,103 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   const [hasLocationPermission, setHasLocationPermission] = useState(false);
   const [timer, setTimer] = useState(0);
   const [mapRegion, setMapRegion] = useState<Region>({
-    latitude: 40.6782,
-    longitude: -73.9442,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
+    ...DEFAULT_MUMBAI_REGION,
   });
   const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid'>(
     'standard',
   );
   const [showMapTypeOverlay, setShowMapTypeOverlay] = useState(false);
-  const [showTerritoryModal, setShowTerritoryModal] = useState(false);
-  const [selectedTerritory, setSelectedTerritory] = useState<Territory | null>(
+  const [useMockTerritories, setUseMockTerritories] = useState(__DEV__);
+  const [selectedTerritoryId, setSelectedTerritoryId] = useState<string | null>(
     null,
   );
-  const [useMockTerritories, setUseMockTerritories] = useState(__DEV__);
+  const [captureCelebration, setCaptureCelebration] =
+    useState<CaptureCelebration | null>(null);
   const [overlays, setOverlays] = useState({
     territories: true,
-    myRoutes: false,
     heatmap: false,
-    popularRoutes: false,
-    elevation: false,
+    pulse: true,
+    routes: false,
   });
   const [heatmapPoints, setHeatmapPoints] = useState<
     Array<{ lat: number; lng: number; intensity: number }>
   >([]);
 
-  // === ALL useRef HOOKS ===
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMounted = useRef(true);
-  const mockSeedKeyRef = useRef<string>('');
+  const hasCenteredOnUser = useRef(false);
+  const mockSeedKeyRef = useRef('');
   const mapRef = useRef<MapView>(null);
   const sheetHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const lastSheetHeight = useRef(COLLAPSED_HEIGHT);
-  const scrollViewRef = useRef<ScrollView>(null);
   const isAnimating = useRef(false);
+  const conquestPulse = useRef(new Animated.Value(0)).current;
+  const captureOpacity = useRef(new Animated.Value(0)).current;
+  const captureTranslateY = useRef(new Animated.Value(12)).current;
 
-  // === HELPER FUNCTIONS ===
+  const territoryDisplays: TerritoryDisplay[] = territories.map(territory => {
+    const center = getPolygonCenter(territory.boundary);
+    const status = getTerritoryStatus(territory, currentUserId);
+    const claimedAt = new Date(territory.claimedAt).getTime();
+    const heldHours = Math.max(0, (Date.now() - claimedAt) / 3_600_000);
+
+    return {
+      territory,
+      center,
+      name: getTerritoryName(territory),
+      status,
+      daysHeld: Math.floor(heldHours / 24),
+      decayHoursRemaining: Math.max(0, DECAY_WINDOW_HOURS - Math.floor(heldHours)),
+    };
+  });
+  const visibleTerritories = territoryDisplays.filter(display =>
+    isPointInsideRegion(display.center, mapRegion),
+  );
+  const selectedTerritory =
+    territoryDisplays.find(display => display.territory.id === selectedTerritoryId) ??
+    null;
+  const ownedTerritories = territories.filter(
+    territory => territory.ownerId === currentUserId,
+  ).length;
+  const visibleEnemyCount = visibleTerritories.filter(
+    territory => territory.status === 'enemy',
+  ).length;
+  const contestedCount = visibleTerritories.filter(
+    territory => territory.status === 'contested',
+  ).length;
+  const rankTitle = getPlayerRankTitle(ownedTerritories, activeRun.distance);
+  const sortedTerritories = [...territoryDisplays].sort((left, right) => {
+    const leftOwned = left.territory.ownerId === currentUserId ? 1 : 0;
+    const rightOwned = right.territory.ownerId === currentUserId ? 1 : 0;
+
+    if (leftOwned !== rightOwned) {
+      return leftOwned - rightOwned;
+    }
+
+    if (left.territory.id === selectedTerritoryId) {
+      return 1;
+    }
+
+    if (right.territory.id === selectedTerritoryId) {
+      return -1;
+    }
+
+    return left.daysHeld - right.daysHeld;
+  });
+
   const snapToPosition = (position: number) => {
-    if (isAnimating.current) return;
+    if (isAnimating.current) {
+      return;
+    }
+
     isAnimating.current = true;
     lastSheetHeight.current = position;
 
     Animated.spring(sheetHeight, {
       toValue: position,
       useNativeDriver: false,
-      tension: 50,
-      friction: 8,
+      tension: 48,
+      friction: 9,
     }).start(() => {
       isAnimating.current = false;
     });
@@ -114,31 +368,33 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
   const getNextSnapPoint = (gestureDirection: number) => {
     const snapPoints = [COLLAPSED_HEIGHT, HALF_HEIGHT, EXPANDED_HEIGHT];
+
     if (gestureDirection < -10) {
-      const nextPoint = snapPoints.find(p => p > lastSheetHeight.current);
-      return nextPoint || EXPANDED_HEIGHT;
-    } else if (gestureDirection > 10) {
-      const nextPoint = [...snapPoints]
-        .reverse()
-        .find(p => p < lastSheetHeight.current);
-      return nextPoint || COLLAPSED_HEIGHT;
+      return snapPoints.find(point => point > lastSheetHeight.current) ?? EXPANDED_HEIGHT;
     }
+
+    if (gestureDirection > 10) {
+      return (
+        [...snapPoints].reverse().find(point => point < lastSheetHeight.current) ??
+        COLLAPSED_HEIGHT
+      );
+    }
+
     return lastSheetHeight.current;
   };
 
-  const formatTime = (seconds: number): string => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hrs.toString().padStart(2, '0')}:${mins
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes
       .toString()
-      .padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      .padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   const getSafePace = () => {
     try {
-      const minimumDistance = 0.005; // 5 meters minimum for meaningful pace
-      return activeRun.distance > minimumDistance
+      return activeRun.distance > 0.005
         ? calculatePace(activeRun.distance, timer)
         : '0\'00"';
     } catch {
@@ -148,8 +404,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
   const getSafeSpeed = () => {
     try {
-      const minimumDistance = 0.005; // 5 meters minimum for meaningful speed
-      return activeRun.distance > minimumDistance
+      return activeRun.distance > 0.005
         ? calculateSpeed(activeRun.distance, timer).toFixed(1)
         : '0.0';
     } catch {
@@ -165,24 +420,61 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     }
   };
 
+  const showCaptureToast = (title: string, subtitle: string) => {
+    setCaptureCelebration({ title, subtitle });
+    captureOpacity.setValue(0);
+    captureTranslateY.setValue(18);
+
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(captureOpacity, {
+          toValue: 1,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.spring(captureTranslateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 70,
+          friction: 8,
+        }),
+      ]),
+      Animated.delay(1700),
+      Animated.parallel([
+        Animated.timing(captureOpacity, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(captureTranslateY, {
+          toValue: -12,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start(() => {
+      if (isMounted.current) {
+        setCaptureCelebration(null);
+      }
+    });
+  };
+
   const generateHeatmapPoints = (
     centerLat: number,
     centerLng: number,
-    count: number = 100,
+    count: number = 80,
   ) => {
     const points = [];
-    const radius = 0.02; // ~2km radius
+    const radius = 0.02;
 
-    for (let i = 0; i < count; i++) {
-      // Random point within radius
+    for (let index = 0; index < count; index += 1) {
       const angle = Math.random() * 2 * Math.PI;
       const distance = Math.random() * radius;
-
-      const lat = centerLat + distance * Math.cos(angle);
-      const lng = centerLng + distance * Math.sin(angle);
-      const intensity = Math.random(); // 0-1 intensity
-
-      points.push({ lat, lng, intensity });
+      points.push({
+        lat: centerLat + distance * Math.cos(angle),
+        lng: centerLng + distance * Math.sin(angle),
+        intensity: Math.random(),
+      });
     }
 
     return points;
@@ -208,43 +500,38 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     return result === PermissionsAndroid.RESULTS.GRANTED;
   };
 
-  // PanResponder for bottom sheet
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !isAnimating.current,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        if (isAnimating.current) return false;
-        const isDraggingVertically =
-          Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
-        if (
-          lastSheetHeight.current === EXPANDED_HEIGHT &&
-          gestureState.dy < 0
-        ) {
+        if (isAnimating.current) {
           return false;
         }
-        return isDraggingVertically && Math.abs(gestureState.dy) > 5;
+
+        return (
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx) &&
+          Math.abs(gestureState.dy) > 5
+        );
       },
       onPanResponderGrant: () => {
         sheetHeight.stopAnimation();
       },
       onPanResponderMove: (_, gestureState) => {
-        const newHeight = lastSheetHeight.current - gestureState.dy;
-        if (newHeight >= COLLAPSED_HEIGHT && newHeight <= EXPANDED_HEIGHT) {
-          sheetHeight.setValue(newHeight);
+        const nextHeight = lastSheetHeight.current - gestureState.dy;
+
+        if (nextHeight >= COLLAPSED_HEIGHT && nextHeight <= EXPANDED_HEIGHT) {
+          sheetHeight.setValue(nextHeight);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        const targetHeight = getNextSnapPoint(gestureState.dy);
-        snapToPosition(targetHeight);
+        snapToPosition(getNextSnapPoint(gestureState.dy));
       },
     }),
   ).current;
 
-  // === ALL useEffect HOOKS ===
-
-  // Cleanup on unmount
   useEffect(() => {
     isMounted.current = true;
+
     return () => {
       isMounted.current = false;
       if (timerInterval.current) {
@@ -253,7 +540,26 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     };
   }, []);
 
-  // Load territories from server on mount, fall back to local storage
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(conquestPulse, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(conquestPulse, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+    return () => animation.stop();
+  }, [conquestPulse]);
+
   useEffect(() => {
     const loadData = async () => {
       if (useMockTerritories) {
@@ -268,56 +574,61 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
       try {
         const loaded = await fetchTerritories();
-        if (isMounted.current) {
-          if (Array.isArray(loaded) && loaded.length > 0) {
-            setTerritories(loaded as Territory[]);
-          } else {
-            setTerritories(
-              getMockTerritories(mapRegion.latitude, mapRegion.longitude),
-            );
-          }
+
+        if (!isMounted.current) {
+          return;
+        }
+
+        if (Array.isArray(loaded) && loaded.length > 0) {
+          setTerritories(loaded as Territory[]);
+        } else {
+          setTerritories(getMockTerritories(mapRegion.latitude, mapRegion.longitude));
         }
       } catch {
         if (isMounted.current) {
-          setTerritories(
-            getMockTerritories(mapRegion.latitude, mapRegion.longitude),
-          );
+          setTerritories(getMockTerritories(mapRegion.latitude, mapRegion.longitude));
         }
       }
     };
-    loadData();
-  }, [useMockTerritories]);
 
-  // When mock mode is enabled and GPS becomes available, reseed around the live location.
+    loadData();
+  }, [
+    mapRegion.latitude,
+    mapRegion.longitude,
+    useMockTerritories,
+    userLocation?.latitude,
+    userLocation?.longitude,
+  ]);
+
   useEffect(() => {
     if (!useMockTerritories || !userLocation || !isMounted.current) {
       return;
     }
 
-    const seedKey = `${userLocation.latitude.toFixed(
-      3,
-    )},${userLocation.longitude.toFixed(3)}`;
+    const seedKey = `${userLocation.latitude.toFixed(3)},${userLocation.longitude.toFixed(3)}`;
     if (mockSeedKeyRef.current === seedKey) {
       return;
     }
 
     mockSeedKeyRef.current = seedKey;
-    setTerritories(
-      getMockTerritories(userLocation.latitude, userLocation.longitude),
-    );
-  }, [useMockTerritories, userLocation?.latitude, userLocation?.longitude]);
+    setTerritories(getMockTerritories(userLocation.latitude, userLocation.longitude));
+  }, [useMockTerritories, userLocation]);
 
-  // Real-time: merge incoming territories from other players
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      return;
+    }
 
     const onTerritoryNew = (territory: Territory) => {
-      if (!isMounted.current) return;
-      setTerritories(prev => {
-        // Ignore duplicates (our own claim already appended locally)
-        if (prev.some(t => t.id === territory.id)) return prev;
-        return [...prev, territory];
-      });
+      if (!isMounted.current) {
+        return;
+      }
+
+      setTerritories(previous =>
+        previous.some(existing => existing.id === territory.id)
+          ? previous
+          : [...previous, territory],
+      );
     };
 
     socket.on('territory:new', onTerritoryNew);
@@ -326,47 +637,44 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     };
   }, [socket]);
 
-  // Request permission on mount (location updates come from MapView callback)
   useEffect(() => {
-    const setupPermission = async () => {
-      // Wait for all interactions/animations to complete before requesting permission
-      const handle = InteractionManager.runAfterInteractions(async () => {
-        if (!isMounted.current) return;
+    const interaction = InteractionManager.runAfterInteractions(async () => {
+      if (!isMounted.current) {
+        return;
+      }
 
-        try {
-          const granted = await requestForegroundLocationPermission();
-          if (isMounted.current) {
-            setHasLocationPermission(granted);
-          }
-          if (!granted) {
-            Alert.alert(
-              'Permission Required',
-              'Location permission required to track runs',
-            );
-          }
-        } catch (error) {
-          console.error('Permission error:', error);
+      try {
+        const granted = await requestForegroundLocationPermission();
+        if (isMounted.current) {
+          setHasLocationPermission(granted);
         }
-      });
-    };
 
-    setupPermission();
+        if (!granted) {
+          Alert.alert(
+            'Permission Required',
+            'Location permission required to track runs.',
+          );
+        }
+      } catch (error) {
+        console.error('Permission error:', error);
+      }
+    });
+
+    return () => interaction.cancel();
   }, []);
 
-  // Timer effect
   useEffect(() => {
     if (activeRun.state === 'running') {
       timerInterval.current = setInterval(() => {
         if (isMounted.current) {
-          setTimer(prev => prev + 1);
+          setTimer(previous => previous + 1);
         }
       }, 1000);
-    } else {
-      if (timerInterval.current) {
-        clearInterval(timerInterval.current);
-        timerInterval.current = null;
-      }
+    } else if (timerInterval.current) {
+      clearInterval(timerInterval.current);
+      timerInterval.current = null;
     }
+
     return () => {
       if (timerInterval.current) {
         clearInterval(timerInterval.current);
@@ -375,85 +683,80 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     };
   }, [activeRun.state]);
 
-  // Generate heatmap when overlay is toggled
   useEffect(() => {
     if (overlays.heatmap && userLocation) {
-      const points = generateHeatmapPoints(
-        userLocation.latitude,
-        userLocation.longitude,
+      setHeatmapPoints(
+        generateHeatmapPoints(userLocation.latitude, userLocation.longitude),
       );
-      setHeatmapPoints(points);
     } else {
       setHeatmapPoints([]);
     }
-  }, [overlays.heatmap, userLocation?.latitude, userLocation?.longitude]);
+  }, [overlays.heatmap, userLocation]);
 
-  // === EVENT HANDLERS ===
+  useEffect(() => {
+    if (
+      selectedTerritoryId &&
+      !territoryDisplays.some(
+        display => display.territory.id === selectedTerritoryId,
+      )
+    ) {
+      setSelectedTerritoryId(null);
+    }
+  }, [selectedTerritoryId, territoryDisplays]);
 
   const handleCenterOnUser = () => {
-    if (userLocation && mapRef.current) {
-      mapRef.current.animateToRegion(
-        {
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        },
-        500,
-      );
+    if (!userLocation || !mapRef.current) {
+      return;
     }
-  };
 
-  const handleToggleMapType = () => {
-    setShowMapTypeOverlay(true);
-  };
-
-  const handleTerritoryPress = (territory: Territory) => {
-    setSelectedTerritory(territory);
-    setShowTerritoryModal(true);
-  };
-
-  const closeTerritoryModal = () => {
-    setShowTerritoryModal(false);
-    setSelectedTerritory(null);
-  };
-
-  const handleViewOwnerProfile = () => {
-    if (!selectedTerritory) return;
-
-    closeTerritoryModal();
-    navigation.navigate('Profile');
-    Alert.alert(
-      'Owner Profile',
-      `Showing profile screen. Territory owner: ${selectedTerritory.ownerName}`,
+    mapRef.current.animateToRegion(
+      {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      },
+      500,
     );
   };
 
-  const handleChallengeTerritory = () => {
-    if (!selectedTerritory) return;
+  const handleTerritoryPress = (territoryId: string) => {
+    setSelectedTerritoryId(territoryId);
+    snapToPosition(HALF_HEIGHT);
+  };
 
-    if (selectedTerritory.ownerId === CURRENT_USER_ID) {
+  const handleViewOwnerProfile = () => {
+    if (!selectedTerritory?.territory.ownerName) {
+      return;
+    }
+
+    navigation.navigate('Profile');
+  };
+
+  const handleChallengeTerritory = () => {
+    if (!selectedTerritory) {
+      return;
+    }
+
+    if (selectedTerritory.status === 'owned') {
       Alert.alert(
-        'Cannot Challenge',
-        'You cannot challenge your own territory.',
+        'Territory Fortified',
+        'This blob is already under your control.',
       );
       return;
     }
 
-    setTerritories(prev =>
-      prev.map(territory =>
-        territory.id === selectedTerritory.id
+    setTerritories(previous =>
+      previous.map(territory =>
+        territory.id === selectedTerritory.territory.id
           ? { ...territory, isUnderChallenge: true }
           : territory,
       ),
     );
-    setSelectedTerritory(prev =>
-      prev ? { ...prev, isUnderChallenge: true } : prev,
-    );
 
     Alert.alert(
       'Challenge Started',
-      `You have challenged ${selectedTerritory.ownerName}'s territory.`,
+      `${selectedTerritory.name} is now contested. Complete a clean loop to overtake it.`,
     );
   };
 
@@ -463,20 +766,21 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   };
 
   const handleToggleOverlay = (overlayKey: keyof typeof overlays) => {
-    setOverlays(prev => ({ ...prev, [overlayKey]: !prev[overlayKey] }));
+    setOverlays(previous => ({ ...previous, [overlayKey]: !previous[overlayKey] }));
   };
 
   const handleStartRun = async () => {
     try {
       const permissionGranted =
         hasLocationPermission || (await requestForegroundLocationPermission());
+
       if (!permissionGranted) {
         if (isMounted.current) {
           setHasLocationPermission(false);
         }
         Alert.alert(
           'Permission Required',
-          'Location permission required to track runs',
+          'Location permission required to track runs.',
         );
         return;
       }
@@ -488,88 +792,50 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       if (!userLocation) {
         Alert.alert(
           'Locating You',
-          'Waiting for GPS signal. Keep the map open briefly and tap Start Run again.',
+          'Waiting for GPS signal. Keep the map open briefly and try again.',
         );
         return;
       }
 
+      const newRun = {
+        state: 'running' as const,
+        startTime: new Date(),
+        path: [userLocation],
+        distance: 0,
+        duration: 0,
+        pausedDuration: 0,
+        isNearStart: false,
+      };
+
       if (isMounted.current) {
-        const newRun = {
-          state: 'running' as const,
-          startTime: new Date(),
-          path: [userLocation],
-          distance: 0,
-          duration: 0,
-          pausedDuration: 0,
-          isNearStart: false,
-        };
         setActiveRun(newRun);
         setTimer(0);
-
-        // Navigate to ActiveRun screen
-        navigation.navigate('ActiveRun', {
-          initialActiveRun: newRun,
-          onPause: () => setActiveRun(prev => ({ ...prev, state: 'paused' })),
-          onResume: () => setActiveRun(prev => ({ ...prev, state: 'running' })),
-          onStop: () => {
-            setActiveRun({
-              state: 'idle',
-              startTime: null,
-              path: [],
-              distance: 0,
-              duration: 0,
-              pausedDuration: 0,
-              isNearStart: false,
-            });
-            setTimer(0);
-          },
-          onClaim: handleClaimTerritory,
-          onRunUpdate: (updatedRun: ActiveRun) => {
-            setActiveRun(updatedRun);
-          },
-        });
       }
+
+      navigation.navigate('ActiveRun', {
+        initialActiveRun: newRun,
+        targetTerritory: selectedTerritory?.territory ?? null,
+        onPause: () => setActiveRun(previous => ({ ...previous, state: 'paused' })),
+        onResume: () => setActiveRun(previous => ({ ...previous, state: 'running' })),
+        onStop: () => {
+          setActiveRun({
+            state: 'idle',
+            startTime: null,
+            path: [],
+            distance: 0,
+            duration: 0,
+            pausedDuration: 0,
+            isNearStart: false,
+          });
+          setTimer(0);
+        },
+        onClaim: handleClaimTerritory,
+        onRunUpdate: (updatedRun: ActiveRun) => {
+          setActiveRun(updatedRun);
+        },
+      });
     } catch (error) {
       console.error('Error starting run:', error);
-    }
-  };
-
-  const handlePauseRun = () => {
-    try {
-      if (isMounted.current) {
-        setActiveRun(prev => ({ ...prev, state: 'paused' }));
-      }
-    } catch (error) {
-      console.error('Error pausing run:', error);
-    }
-  };
-
-  const handleResumeRun = () => {
-    try {
-      if (isMounted.current) {
-        setActiveRun(prev => ({ ...prev, state: 'running' }));
-      }
-    } catch (error) {
-      console.error('Error resuming run:', error);
-    }
-  };
-
-  const handleStopRun = () => {
-    try {
-      if (isMounted.current) {
-        setActiveRun({
-          state: 'idle',
-          startTime: null,
-          path: [],
-          distance: 0,
-          duration: 0,
-          pausedDuration: 0,
-          isNearStart: false,
-        });
-        setTimer(0);
-      }
-    } catch (error) {
-      console.error('Error stopping run:', error);
     }
   };
 
@@ -577,34 +843,21 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     try {
       if (activeRun.path.length < 10) {
         Alert.alert(
-          'Territory Too Small',
-          'Run a longer path to create a territory!',
+          'Loop Too Short',
+          'Run a larger loop to carve a territory blob.',
         );
         return;
       }
 
       const polygon = [...activeRun.path];
-      if (polygon.length > 0) {
-        polygon.push(polygon[0]); // Close the loop
-      }
+      const closedPolygon =
+        polygon.length > 0 ? [...polygon, polygon[0]] : polygon;
 
-      const validation = isValidTerritory(polygon);
+      const validation = isValidTerritory(closedPolygon);
       if (!validation.valid) {
         Alert.alert(
           'Cannot Claim Territory',
-          validation.reason || 'Invalid territory',
-        );
-        return;
-      }
-
-      const claimedCells = getGridCellsForPolygon(
-        polygon,
-        DEFAULT_GRID_CELL_SIZE_METERS,
-      );
-      if (claimedCells.length === 0) {
-        Alert.alert(
-          'Cannot Claim Territory',
-          `Your loop does not fully enclose a ${DEFAULT_GRID_CELL_SIZE_METERS}m grid cell yet. Make a larger loop and try again.`,
+          validation.reason || 'Invalid territory.',
         );
         return;
       }
@@ -614,29 +867,27 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       const calories = getSafeCalories();
       const runId = `run-${Date.now()}`;
       const claimedAt = new Date();
-
-      const newTerritories: Territory[] = claimedCells.map(cell => ({
-        id: `territory-${cell.id}-${Date.now()}`,
-        ownerId: 'user-1',
-        ownerName: 'You',
-        ownerColor: '#52FF30',
-        boundary: cell.boundary,
-        area: cell.areaKm2,
+      const simplifiedBoundary = simplifyPolygon(polygon);
+      const finalBoundary =
+        simplifiedBoundary.length >= 3 ? simplifiedBoundary : polygon;
+      const claimedArea = validation.area ?? calculatePolygonArea(finalBoundary);
+      const newTerritory: Territory = {
+        id: `territory-${runId}`,
+        ownerId: currentUserId,
+        ownerName: currentUserName,
+        ownerColor: '#29F0D7',
+        boundary: finalBoundary,
+        area: claimedArea,
         claimedAt,
         lastDefended: null,
         strength: 100,
         isUnderChallenge: false,
         runId,
-      }));
-
-      const totalClaimedArea = newTerritories.reduce(
-        (sum, territory) => sum + territory.area,
-        0,
-      );
+      };
 
       const completedRun: Run = {
         id: runId,
-        userId: 'user-1',
+        userId: currentUserId,
         startTime: activeRun.startTime || new Date(),
         endTime: new Date(),
         path: activeRun.path,
@@ -645,98 +896,91 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         averagePace: pace,
         averageSpeed: parseFloat(speed),
         isLoop: true,
-        territoryClaimed: newTerritories[0].id,
+        territoryClaimed: newTerritory.id,
         territoriesChallenged: [],
-        calories: calories,
+        calories,
       };
 
       const saveTasks: Array<Promise<unknown>> = [
         saveRun(completedRun),
-        updateUserStats(activeRun.distance, totalClaimedArea),
+        updateUserStats(activeRun.distance, claimedArea),
+        saveTerritory(newTerritory),
+        apiClaimTerritory({
+          territory: newTerritory,
+          run: {
+            id: completedRun.id,
+            distance: completedRun.distance,
+            duration: completedRun.duration,
+            averagePace: completedRun.averagePace,
+            averageSpeed: completedRun.averageSpeed,
+            calories: completedRun.calories,
+            path: activeRun.path,
+          },
+        }).catch(error =>
+          console.warn('[api] territory claim failed:', error.message),
+        ),
       ];
-
-      for (let i = 0; i < newTerritories.length; i++) {
-        const territory = newTerritories[i];
-        saveTasks.push(saveTerritory(territory));
-        const payload =
-          i === 0
-            ? {
-                territory,
-                run: {
-                  id: completedRun.id,
-                  distance: completedRun.distance,
-                  duration: completedRun.duration,
-                  averagePace: completedRun.averagePace,
-                  averageSpeed: completedRun.averageSpeed,
-                  calories: completedRun.calories,
-                  path: activeRun.path,
-                },
-              }
-            : { territory };
-
-        saveTasks.push(
-          apiClaimTerritory(payload).catch(err =>
-            console.warn('[api] territory claim failed:', err.message),
-          ),
-        );
-      }
 
       await Promise.all(saveTasks);
 
       if (isMounted.current) {
-        setTerritories(prev => [...prev, ...newTerritories]);
+        setTerritories(previous => [...previous, newTerritory]);
       }
 
-      Alert.alert(
-        '🏆 Territory Claimed!',
-        `Cells: ${
-          newTerritories.length
-        } (${DEFAULT_GRID_CELL_SIZE_METERS}m grid)\nArea: ${(
-          totalClaimedArea * 1_000_000
-        ).toFixed(0)}m²\nDistance: ${activeRun.distance.toFixed(
-          2,
-        )}km\nTime: ${formatTime(timer)}`,
-        [{ text: 'Awesome!', style: 'default' }],
+      const xpEarned = Math.round(activeRun.distance * 90) + 180;
+      showCaptureToast(
+        `+${xpEarned} XP`,
+        `${getTerritoryName(newTerritory)} captured`,
       );
-
-      handleStopRun();
+      setSelectedTerritoryId(newTerritory.id);
+      setActiveRun({
+        state: 'idle',
+        startTime: null,
+        path: [],
+        distance: 0,
+        duration: 0,
+        pausedDuration: 0,
+        isNearStart: false,
+      });
+      setTimer(0);
     } catch (error) {
       console.error('Error claiming territory:', error);
       Alert.alert('Error', 'Failed to claim territory. Please try again.');
     }
   };
 
-  // Calculate display values
   const pace = getSafePace();
   const speed = getSafeSpeed();
   const calories = getSafeCalories();
+  const pulseScale = conquestPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1.18],
+  });
+  const pulseOpacity = conquestPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 0.16],
+  });
+  const simplifiedPreview = simplifyPolygon(activeRun.path);
+  const previewBoundary =
+    simplifiedPreview.length > 2 ? simplifiedPreview : activeRun.path;
 
-  // === RENDER ===
   return (
     <View style={styles.container}>
-      {/* Map */}
       <View style={styles.mapContainer}>
         <MapView
           ref={mapRef}
           style={styles.map}
+          provider={PROVIDER_GOOGLE}
           mapType={mapType}
+          customMapStyle={mapType === 'standard' ? TACTICAL_MAP_STYLE : undefined}
           initialRegion={mapRegion}
-          region={
-            userLocation
-              ? {
-                  latitude: userLocation.latitude,
-                  longitude: userLocation.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }
-              : mapRegion
-          }
           showsUserLocation={hasLocationPermission}
           showsMyLocationButton={false}
           followsUserLocation={activeRun.state === 'running'}
           onRegionChangeComplete={setMapRegion}
           onUserLocationChange={event => {
             const { coordinate } = event.nativeEvent;
+
             if (
               !coordinate ||
               typeof coordinate.latitude !== 'number' ||
@@ -760,145 +1004,218 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
             setUserLocation(location);
 
+            if (!hasCenteredOnUser.current) {
+              hasCenteredOnUser.current = true;
+              const nextRegion = {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              };
+              setMapRegion(nextRegion);
+              mapRef.current?.animateToRegion(nextRegion, 450);
+            }
+
             if (activeRun.state === 'running') {
-              setActiveRun(prev => {
-                const newPath = [...prev.path, location];
-                const newDistance = calculatePathDistance(newPath);
-                const isNear =
-                  prev.path.length > 10 &&
-                  isNearStartPoint(location, prev.path[0]);
+              setActiveRun(previous => {
+                const nextPath = [...previous.path, location];
+                const nextDistance = calculatePathDistance(nextPath);
+                const isNearLoop =
+                  previous.path.length > 10 &&
+                  isNearStartPoint(location, previous.path[0]);
+
                 return {
-                  ...prev,
-                  path: newPath,
-                  distance: newDistance,
-                  isNearStart: isNear,
+                  ...previous,
+                  path: nextPath,
+                  distance: nextDistance,
+                  isNearStart: isNearLoop,
                 };
               });
             }
           }}
         >
-          {/* Render existing territories */}
           {overlays.territories &&
-            territories.map(territory => {
-              try {
-                const validBoundary = territory.boundary.filter(
-                  p =>
-                    typeof p.latitude === 'number' &&
-                    typeof p.longitude === 'number',
-                );
-                if (validBoundary.length < 3) return null;
+            sortedTerritories.map(display => {
+              const isSelected =
+                selectedTerritory?.territory.id === display.territory.id;
+              const isOwnedByCurrentUser =
+                display.territory.ownerId === currentUserId;
+              const palette = getTerritoryPalette(
+                display.status,
+                isSelected,
+                isOwnedByCurrentUser,
+              );
+              const validBoundary = display.territory.boundary.filter(
+                point =>
+                  typeof point.latitude === 'number' &&
+                  typeof point.longitude === 'number',
+              );
 
-                // Convert hex color to rgba with transparency
-                const hexToRgba = (hex: string, alpha: number) => {
-                  const r = parseInt(hex.slice(1, 3), 16);
-                  const g = parseInt(hex.slice(3, 5), 16);
-                  const b = parseInt(hex.slice(5, 7), 16);
-                  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-                };
-
-                return (
-                  <Polygon
-                    key={territory.id}
-                    coordinates={validBoundary}
-                    fillColor={hexToRgba(territory.ownerColor, 0.3)}
-                    strokeColor={territory.ownerColor}
-                    strokeWidth={2}
-                    tappable
-                    onPress={() => handleTerritoryPress(territory)}
-                  />
-                );
-              } catch {
+              if (validBoundary.length < 3) {
                 return null;
               }
+
+              return (
+                <Polygon
+                  key={display.territory.id}
+                  coordinates={validBoundary}
+                  fillColor={palette.fill}
+                  strokeColor={palette.stroke}
+                  strokeWidth={palette.strokeWidth}
+                  tappable
+                  onPress={() => handleTerritoryPress(display.territory.id)}
+                />
+              );
             })}
 
-          {/* Render active run path */}
-          {activeRun.state !== 'idle' &&
-            activeRun.path.length > 1 &&
-            (() => {
-              try {
-                const validPath = activeRun.path.filter(
-                  p =>
-                    typeof p.latitude === 'number' &&
-                    typeof p.longitude === 'number',
-                );
-                if (validPath.length < 2) return null;
-                return (
-                  <Polyline
-                    key="active-path"
-                    coordinates={validPath}
-                    strokeColor={activeRun.isNearStart ? '#FFD700' : '#52FF30'}
-                    strokeWidth={activeRun.isNearStart ? 6 : 4}
-                    lineCap="round"
-                    lineJoin="round"
-                  />
-                );
-              } catch {
-                return null;
-              }
-            })()}
+          {overlays.territories &&
+            sortedTerritories.map(display => {
+              const isSelected =
+                selectedTerritory?.territory.id === display.territory.id;
+              const isOwnedByCurrentUser =
+                display.territory.ownerId === currentUserId;
+              const palette = getTerritoryPalette(
+                display.status,
+                isSelected,
+                isOwnedByCurrentUser,
+              );
+              const shouldPulse =
+                overlays.pulse &&
+                (display.status === 'contested' || isOwnedByCurrentUser || isSelected);
 
-          {/* Render heatmap dots */}
+              return (
+                <Marker
+                  key={`${display.territory.id}-marker`}
+                  coordinate={{
+                    latitude: display.center.latitude,
+                    longitude: display.center.longitude,
+                  }}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                >
+                  <View style={styles.markerWrapper}>
+                    {shouldPulse && (
+                      <Animated.View
+                        style={[
+                          styles.markerPulse,
+                          {
+                            borderColor: palette.marker,
+                            opacity: pulseOpacity,
+                            transform: [{ scale: pulseScale }],
+                          },
+                        ]}
+                      />
+                    )}
+                    <View
+                      style={[
+                        styles.markerBadge,
+                        isOwnedByCurrentUser && styles.markerBadgeOwned,
+                        {
+                          backgroundColor: palette.markerBg,
+                          borderColor: palette.marker,
+                        },
+                      ]}
+                    >
+                      <Icon
+                        name={
+                          display.status === 'owned'
+                            ? 'shield-outline'
+                            : display.status === 'contested'
+                              ? 'flame-outline'
+                              : 'warning-outline'
+                        }
+                        size={isOwnedByCurrentUser ? 16 : 14}
+                        color={palette.marker}
+                      />
+                    </View>
+                  </View>
+                </Marker>
+              );
+            })}
+
+          {selectedTerritory && (
+            <Circle
+              center={{
+                latitude: selectedTerritory.center.latitude,
+                longitude: selectedTerritory.center.longitude,
+              }}
+              radius={140}
+              fillColor="rgba(255, 211, 77, 0.08)"
+              strokeColor="rgba(255, 211, 77, 0.42)"
+            />
+          )}
+
+          {activeRun.state !== 'idle' && previewBoundary.length > 2 && (
+            <Polygon
+              coordinates={previewBoundary}
+              fillColor={
+                activeRun.isNearStart
+                  ? 'rgba(41, 240, 215, 0.18)'
+                  : 'rgba(41, 240, 215, 0.1)'
+              }
+              strokeColor={activeRun.isNearStart ? '#FFD34D' : '#29F0D7'}
+              strokeWidth={activeRun.isNearStart ? 3 : 2}
+            />
+          )}
+
+          {activeRun.state !== 'idle' && activeRun.path.length > 1 && (
+            <Polyline
+              coordinates={activeRun.path}
+              strokeColor={activeRun.isNearStart ? '#FFD34D' : '#29F0D7'}
+              strokeWidth={activeRun.isNearStart ? 7 : 5}
+              lineCap="round"
+              lineJoin="round"
+            />
+          )}
+
           {overlays.heatmap &&
             heatmapPoints.map((point, index) => (
               <Circle
                 key={`heatmap-${index}`}
                 center={{ latitude: point.lat, longitude: point.lng }}
-                radius={20 + point.intensity * 30} // Radius 20-50m based on intensity
-                fillColor={`rgba(255, 107, 53, ${0.3 + point.intensity * 0.5})`} // Orange with varying opacity
+                radius={30 + point.intensity * 40}
+                fillColor={`rgba(41, 240, 215, ${0.12 + point.intensity * 0.18})`}
                 strokeColor="transparent"
               />
             ))}
 
-          {/* Render popular routes dots */}
-          {overlays.popularRoutes &&
+          {overlays.routes &&
             heatmapPoints.map((point, index) => (
               <Circle
-                key={`popular-${index}`}
+                key={`route-${index}`}
                 center={{ latitude: point.lat, longitude: point.lng }}
-                radius={15 + point.intensity * 25}
-                fillColor={`rgba(82, 255, 48, ${0.2 + point.intensity * 0.4})`} // Green dots
+                radius={18 + point.intensity * 28}
+                fillColor={`rgba(255, 122, 69, ${0.12 + point.intensity * 0.16})`}
                 strokeColor="transparent"
               />
             ))}
         </MapView>
 
-        {/* Header Overlay */}
-        <View style={styles.headerOverlay}>
-          <View style={styles.headerTop}>
-            <Text style={styles.title}>
-              {activeRun.state === 'idle' && 'Ready to Run'}
-              {activeRun.state === 'running' && 'Running...'}
-              {activeRun.state === 'paused' && 'Run Paused'}
-            </Text>
-            {activeRun.isNearStart && (
-              <TouchableOpacity
-                style={styles.claimButton}
-                onPress={handleClaimTerritory}
-              >
-                <Icon name="trophy" size={16} color="#000" />
-                <Text style={styles.claimButtonText}>Close Loop!</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <View style={styles.statusBar}>
-            <View style={styles.statusItem}>
-              <Icon name="location" size={12} color="#52FF30" />
-              <Text style={styles.statusText}>
-                {userLocation ? 'GPS Connected' : 'Waiting GPS...'}
-              </Text>
-            </View>
-            <View style={styles.statusItem}>
-              <Text style={styles.statusText}>
-                {activeRun.isNearStart
-                  ? '⚡ Near Start Point!'
-                  : `${territories.length} Territories`}
-              </Text>
-            </View>
-          </View>
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            'rgba(4, 8, 14, 0.78)',
+            'rgba(7, 18, 26, 0.18)',
+            'rgba(4, 8, 14, 0.9)',
+          ]}
+          locations={[0, 0.42, 1]}
+          style={styles.mapAtmosphere}
+        />
+
+        <View pointerEvents="none" style={styles.gridScrim}>
+          <View style={styles.scanline} />
+          <View style={[styles.scanline, styles.scanlineMid]} />
+          <View style={[styles.scanline, styles.scanlineBottom]} />
         </View>
 
-        {/* Overlay Filter Chips */}
+        <TacticalHud
+          playerName={currentUserName}
+          territoryCount={ownedTerritories}
+          visibleEnemyCount={visibleEnemyCount}
+          contestedCount={contestedCount}
+          rankTitle={rankTitle}
+          gpsReady={!!userLocation}
+        />
+
         <View style={styles.overlayChipsContainer}>
           <ScrollView
             horizontal
@@ -908,110 +1225,88 @@ const RunMap = ({ navigation }: { navigation: any }) => {
             <TouchableOpacity
               style={[
                 styles.filterChip,
-                overlays.territories && styles.filterChipActive,
+                overlays.territories && styles.filterChipActiveTeal,
               ]}
               onPress={() => handleToggleOverlay('territories')}
             >
               <Icon
-                name="flag"
+                name="shapes-outline"
                 size={14}
-                color={overlays.territories ? '#000' : '#fff'}
+                color={overlays.territories ? '#051217' : '#F1F5FA'}
               />
               <Text
                 style={[
                   styles.filterChipText,
-                  overlays.territories && styles.filterChipTextActive,
+                  overlays.territories && styles.filterChipTextDark,
                 ]}
               >
-                Territories
+                Blobs
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.filterChip,
-                overlays.myRoutes && styles.filterChipActive,
-              ]}
-              onPress={() => handleToggleOverlay('myRoutes')}
-            >
-              <Icon
-                name="footsteps"
-                size={14}
-                color={overlays.myRoutes ? '#000' : '#fff'}
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  overlays.myRoutes && styles.filterChipTextActive,
-                ]}
-              >
-                My Routes
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                overlays.heatmap && styles.filterChipActive,
+                overlays.heatmap && styles.filterChipActiveGold,
               ]}
               onPress={() => handleToggleOverlay('heatmap')}
             >
               <Icon
-                name="analytics"
+                name="analytics-outline"
                 size={14}
-                color={overlays.heatmap ? '#000' : '#fff'}
+                color={overlays.heatmap ? '#1D1403' : '#F1F5FA'}
               />
               <Text
                 style={[
                   styles.filterChipText,
-                  overlays.heatmap && styles.filterChipTextActive,
+                  overlays.heatmap && styles.filterChipTextDarkWarm,
                 ]}
               >
-                Heatmap
+                Intel
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.filterChip,
-                overlays.popularRoutes && styles.filterChipActive,
+                overlays.pulse && styles.filterChipActiveOrange,
               ]}
-              onPress={() => handleToggleOverlay('popularRoutes')}
+              onPress={() => handleToggleOverlay('pulse')}
             >
               <Icon
-                name="trending-up"
+                name="pulse-outline"
                 size={14}
-                color={overlays.popularRoutes ? '#000' : '#fff'}
+                color={overlays.pulse ? '#200A02' : '#F1F5FA'}
               />
               <Text
                 style={[
                   styles.filterChipText,
-                  overlays.popularRoutes && styles.filterChipTextActive,
+                  overlays.pulse && styles.filterChipTextDarkWarm,
                 ]}
               >
-                Popular
+                Pulse
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.filterChip,
-                overlays.elevation && styles.filterChipActive,
+                overlays.routes && styles.filterChipActiveOrange,
               ]}
-              onPress={() => handleToggleOverlay('elevation')}
+              onPress={() => handleToggleOverlay('routes')}
             >
               <Icon
-                name="bar-chart"
+                name="git-network-outline"
                 size={14}
-                color={overlays.elevation ? '#000' : '#fff'}
+                color={overlays.routes ? '#200A02' : '#F1F5FA'}
               />
               <Text
                 style={[
                   styles.filterChipText,
-                  overlays.elevation && styles.filterChipTextActive,
+                  overlays.routes && styles.filterChipTextDarkWarm,
                 ]}
               >
-                Elevation
+                Routes
               </Text>
             </TouchableOpacity>
 
@@ -1019,165 +1314,107 @@ const RunMap = ({ navigation }: { navigation: any }) => {
               <TouchableOpacity
                 style={[
                   styles.filterChip,
-                  useMockTerritories && styles.filterChipActive,
+                  useMockTerritories && styles.filterChipActiveTeal,
                 ]}
-                onPress={() => setUseMockTerritories(prev => !prev)}
+                onPress={() => setUseMockTerritories(previous => !previous)}
               >
                 <Icon
-                  name="flask"
+                  name="flask-outline"
                   size={14}
-                  color={useMockTerritories ? '#000' : '#fff'}
+                  color={useMockTerritories ? '#051217' : '#F1F5FA'}
                 />
                 <Text
                   style={[
                     styles.filterChipText,
-                    useMockTerritories && styles.filterChipTextActive,
+                    useMockTerritories && styles.filterChipTextDark,
                   ]}
                 >
-                  Mock Territories
+                  Mock
                 </Text>
               </TouchableOpacity>
             )}
           </ScrollView>
         </View>
 
-        {/* Map Controls */}
+        <View style={styles.legend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendSwatch, styles.legendOwned]} />
+            <Text style={styles.legendText}>Your Blob</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendSwatch, styles.legendEnemy]} />
+            <Text style={styles.legendText}>Enemy Blob</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendSwatch, styles.legendContested]} />
+            <Text style={styles.legendText}>Contested</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendSwatch, styles.legendRoute]} />
+            <Text style={styles.legendText}>Live Loop</Text>
+          </View>
+        </View>
+
         <View style={styles.mapControls}>
           <TouchableOpacity
             style={styles.controlButton}
             onPress={handleCenterOnUser}
           >
-            <Icon name="navigate-outline" size={22} color="#fff" />
+            <Icon name="locate" size={22} color="#E8F7FF" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.controlButton}
-            onPress={handleToggleMapType}
+            onPress={() => setShowMapTypeOverlay(true)}
           >
-            <Icon name="layers-outline" size={22} color="#fff" />
+            <Icon name="layers-outline" size={22} color="#E8F7FF" />
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity style={styles.startFab} onPress={handleStartRun}>
+          <LinearGradient
+            colors={['#FFD34D', '#FFAA2B']}
+            style={styles.startFabGradient}
+          >
+            <Icon name="footsteps-outline" size={24} color="#121417" />
+            <Text style={styles.startFabText}>START RUN</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {activeRun.isNearStart && (
+          <TouchableOpacity
+            style={styles.loopReadyBanner}
+            onPress={handleClaimTerritory}
+          >
+            <Icon name="trophy" size={18} color="#121417" />
+            <Text style={styles.loopReadyText}>Close the loop to conquer</Text>
+          </TouchableOpacity>
+        )}
+
+        {captureCelebration && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.captureCelebration,
+              {
+                opacity: captureOpacity,
+                transform: [{ translateY: captureTranslateY }],
+              },
+            ]}
+          >
+            <Icon name="sparkles" size={18} color="#FFD34D" />
+            <View style={styles.captureTextWrap}>
+              <Text style={styles.captureTitle}>{captureCelebration.title}</Text>
+              <Text style={styles.captureSubtitle}>
+                {captureCelebration.subtitle}
+              </Text>
+            </View>
+          </Animated.View>
+        )}
       </View>
 
-      {/* Territory Detail Modal */}
-      <Modal
-        visible={showTerritoryModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closeTerritoryModal}
-      >
-        <TouchableOpacity
-          style={styles.overlayBackdrop}
-          activeOpacity={1}
-          onPress={closeTerritoryModal}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.territoryModalCard}
-            onPress={() => {}}
-          >
-            <View style={styles.overlayHeader}>
-              <View style={styles.territoryOwnerRow}>
-                <View
-                  style={[
-                    styles.territoryOwnerDot,
-                    {
-                      backgroundColor:
-                        selectedTerritory?.ownerColor || '#52FF30',
-                    },
-                  ]}
-                />
-                <Text style={styles.overlayTitle} numberOfLines={1}>
-                  {selectedTerritory?.ownerName || 'Unknown Owner'}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={closeTerritoryModal}>
-                <Icon name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.overlaySection}>
-              <View style={styles.territoryInfoGrid}>
-                <View style={styles.territoryInfoItem}>
-                  <Text style={styles.statLabel}>Area</Text>
-                  <Text style={styles.territoryInfoValue}>
-                    {selectedTerritory
-                      ? `${Math.round(
-                          selectedTerritory.area * 1_000_000,
-                        ).toLocaleString()} m²`
-                      : '--'}
-                  </Text>
-                </View>
-                <View style={styles.territoryInfoItem}>
-                  <Text style={styles.statLabel}>Strength</Text>
-                  <Text style={styles.territoryInfoValue}>
-                    {selectedTerritory
-                      ? `${selectedTerritory.strength}%`
-                      : '--'}
-                  </Text>
-                </View>
-                <View style={styles.territoryInfoItem}>
-                  <Text style={styles.statLabel}>Claimed</Text>
-                  <Text style={styles.territoryInfoValue}>
-                    {selectedTerritory
-                      ? new Date(selectedTerritory.claimedAt).toLocaleString()
-                      : '--'}
-                  </Text>
-                </View>
-                <View style={styles.territoryInfoItem}>
-                  <Text style={styles.statLabel}>Run</Text>
-                  <Text style={styles.territoryInfoValue} numberOfLines={1}>
-                    {selectedTerritory?.runId || '--'}
-                  </Text>
-                </View>
-                <View style={styles.territoryInfoItem}>
-                  <Text style={styles.statLabel}>Status</Text>
-                  <Text style={styles.territoryInfoValue}>
-                    {selectedTerritory?.isUnderChallenge
-                      ? 'Under Challenge'
-                      : 'Secure'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.territoryActionsRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.territoryActionButton,
-                    styles.territoryActionSecondary,
-                  ]}
-                  onPress={handleViewOwnerProfile}
-                >
-                  <Icon name="person-circle-outline" size={16} color="#fff" />
-                  <Text style={styles.territoryActionText}>
-                    View Owner Profile
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.territoryActionButton,
-                    styles.territoryActionPrimary,
-                    selectedTerritory?.ownerId === CURRENT_USER_ID &&
-                      styles.territoryActionDisabled,
-                  ]}
-                  onPress={handleChallengeTerritory}
-                  disabled={selectedTerritory?.ownerId === CURRENT_USER_ID}
-                >
-                  <Icon name="flash-outline" size={16} color="#000" />
-                  <Text style={styles.territoryActionTextDark}>
-                    Challenge Territory
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Map Type Overlay */}
       <Modal
         visible={showMapTypeOverlay}
-        transparent={true}
+        transparent
         animationType="slide"
         onRequestClose={() => setShowMapTypeOverlay(false)}
       >
@@ -1188,203 +1425,107 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         >
           <View style={styles.mapTypeOverlay}>
             <View style={styles.overlayHeader}>
-              <Text style={styles.overlayTitle}>Map Type</Text>
+              <Text style={styles.overlayTitle}>Map Layers</Text>
               <TouchableOpacity onPress={() => setShowMapTypeOverlay(false)}>
-                <Icon name="close" size={24} color="#fff" />
+                <Icon name="close" size={24} color="#FFF3C4" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.overlaySection}>
-              <View style={styles.mapTypeOptions}>
+              {(['standard', 'satellite', 'hybrid'] as const).map(type => (
                 <TouchableOpacity
+                  key={type}
                   style={[
                     styles.mapTypeOption,
-                    mapType === 'standard' && styles.mapTypeOptionActive,
+                    mapType === type && styles.mapTypeOptionActive,
                   ]}
-                  onPress={() => handleSelectMapType('standard')}
+                  onPress={() => handleSelectMapType(type)}
                 >
                   <Icon
-                    name="map-outline"
-                    size={24}
-                    color={mapType === 'standard' ? '#52FF30' : '#fff'}
+                    name={
+                      type === 'standard'
+                        ? 'map-outline'
+                        : type === 'satellite'
+                          ? 'globe-outline'
+                          : 'layers-outline'
+                    }
+                    size={22}
+                    color={mapType === type ? '#FFD34D' : '#E3E9F5'}
                   />
                   <Text
                     style={[
                       styles.mapTypeText,
-                      mapType === 'standard' && styles.mapTypeTextActive,
+                      mapType === type && styles.mapTypeTextActive,
                     ]}
                   >
-                    Standard
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
                   </Text>
-                  {mapType === 'standard' && (
-                    <Icon name="checkmark-circle" size={20} color="#52FF30" />
+                  {mapType === type && (
+                    <Icon name="checkmark-circle" size={20} color="#FFD34D" />
                   )}
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.mapTypeOption,
-                    mapType === 'satellite' && styles.mapTypeOptionActive,
-                  ]}
-                  onPress={() => handleSelectMapType('satellite')}
-                >
-                  <Icon
-                    name="globe-outline"
-                    size={24}
-                    color={mapType === 'satellite' ? '#52FF30' : '#fff'}
-                  />
-                  <Text
-                    style={[
-                      styles.mapTypeText,
-                      mapType === 'satellite' && styles.mapTypeTextActive,
-                    ]}
-                  >
-                    Satellite
-                  </Text>
-                  {mapType === 'satellite' && (
-                    <Icon name="checkmark-circle" size={20} color="#52FF30" />
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.mapTypeOption,
-                    mapType === 'hybrid' && styles.mapTypeOptionActive,
-                  ]}
-                  onPress={() => handleSelectMapType('hybrid')}
-                >
-                  <Icon
-                    name="layers-outline"
-                    size={24}
-                    color={mapType === 'hybrid' ? '#52FF30' : '#fff'}
-                  />
-                  <Text
-                    style={[
-                      styles.mapTypeText,
-                      mapType === 'hybrid' && styles.mapTypeTextActive,
-                    ]}
-                  >
-                    Hybrid
-                  </Text>
-                  {mapType === 'hybrid' && (
-                    <Icon name="checkmark-circle" size={20} color="#52FF30" />
-                  )}
-                </TouchableOpacity>
-              </View>
+              ))}
             </View>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Bottom Sheet */}
       <Animated.View
         style={[styles.bottomSheet, { height: sheetHeight }]}
         {...panResponder.panHandlers}
       >
         <View style={styles.dragHandleContainer}>
           <View style={styles.dragHandle} />
+          <Text style={styles.bottomSheetEyebrow}>Frontline Command</Text>
         </View>
 
         <ScrollView
-          ref={scrollViewRef}
-          style={styles.statsSection}
+          style={styles.sheetScroll}
           showsVerticalScrollIndicator={false}
-          scrollEnabled={true}
-          nestedScrollEnabled={true}
+          nestedScrollEnabled
         >
-          {/* Stats Grid */}
-          <View style={styles.statsGrid}>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Distance</Text>
-              <Text style={styles.statValue}>
-                {activeRun.distance.toFixed(2)}
-              </Text>
-              <Text style={styles.statUnit}>km</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Pace</Text>
-              <Text style={styles.statValue}>{pace}</Text>
-              <Text style={styles.statUnit}>/km</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Avg Speed</Text>
-              <Text style={styles.statValue}>{speed}</Text>
-              <Text style={styles.statUnit}>km/h</Text>
-            </View>
-          </View>
+          <TerritoryIntelSheet
+            selectedTerritory={
+              selectedTerritory
+                ? {
+                    id: selectedTerritory.territory.id,
+                    name: selectedTerritory.name,
+                    ownerName: selectedTerritory.territory.ownerName,
+                    status: selectedTerritory.status,
+                    daysHeld: selectedTerritory.daysHeld,
+                    decayHoursRemaining: selectedTerritory.decayHoursRemaining,
+                    areaM2: selectedTerritory.territory.area * 1_000_000,
+                    strength: selectedTerritory.territory.strength,
+                  }
+                : null
+            }
+            territoryCount={ownedTerritories}
+            enemyCount={visibleEnemyCount}
+            contestedCount={contestedCount}
+            distanceKm={activeRun.distance}
+            durationLabel={formatTime(timer)}
+            averageSpeed={speed}
+            onStartRun={handleStartRun}
+            onChallengeTerritory={handleChallengeTerritory}
+            onViewOwner={handleViewOwnerProfile}
+          />
 
-          {/* Time Display */}
-          <View style={styles.timerSection}>
-            <Text style={styles.timerLabel}>Duration</Text>
-            <Text style={styles.timerValue}>{formatTime(timer)}</Text>
-          </View>
-
-          {/* Additional Stats */}
-          <View style={styles.secondaryStats}>
-            <View style={styles.secondaryStatItem}>
-              <Icon name="flame-outline" size={20} color="#FF6B35" />
-              <Text style={styles.secondaryStatValue}>{calories}</Text>
-              <Text style={styles.secondaryStatLabel}>kcal</Text>
+          <View style={styles.quickStatsRow}>
+            <View style={styles.quickStatCard}>
+              <Icon name="flame-outline" size={18} color="#FF7A45" />
+              <Text style={styles.quickStatValue}>{calories}</Text>
+              <Text style={styles.quickStatLabel}>KCAL</Text>
             </View>
-            <View style={styles.secondaryStatItem}>
-              <Icon name="footsteps-outline" size={20} color="#52FF30" />
-              <Text style={styles.secondaryStatValue}>
-                {activeRun.path.length}
-              </Text>
-              <Text style={styles.secondaryStatLabel}>points</Text>
+            <View style={styles.quickStatCard}>
+              <Icon name="timer-outline" size={18} color="#FFD34D" />
+              <Text style={styles.quickStatValue}>{pace}</Text>
+              <Text style={styles.quickStatLabel}>PACE</Text>
             </View>
-            <View style={styles.secondaryStatItem}>
-              <Icon name="map-outline" size={20} color="#4A90D9" />
-              <Text style={styles.secondaryStatValue}>
-                {territories.length}
-              </Text>
-              <Text style={styles.secondaryStatLabel}>zones</Text>
+            <View style={styles.quickStatCard}>
+              <Icon name="shield-outline" size={18} color="#29F0D7" />
+              <Text style={styles.quickStatValue}>{ownedTerritories}</Text>
+              <Text style={styles.quickStatLabel}>HELD</Text>
             </View>
-          </View>
-
-          {/* Control Buttons */}
-          <View style={styles.controlsSection}>
-            {activeRun.state === 'idle' && (
-              <TouchableOpacity
-                style={styles.startButton}
-                onPress={handleStartRun}
-              >
-                <Icon name="play" size={32} color="#000" />
-                <Text style={styles.startButtonText}>Start Run</Text>
-              </TouchableOpacity>
-            )}
-            {activeRun.state === 'running' && (
-              <View style={styles.runningControls}>
-                <TouchableOpacity
-                  style={styles.pauseButton}
-                  onPress={handlePauseRun}
-                >
-                  <Icon name="pause" size={28} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.stopButton}
-                  onPress={handleStopRun}
-                >
-                  <Icon name="stop" size={28} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            )}
-            {activeRun.state === 'paused' && (
-              <View style={styles.runningControls}>
-                <TouchableOpacity
-                  style={styles.resumeButton}
-                  onPress={handleResumeRun}
-                >
-                  <Icon name="play" size={28} color="#000" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.stopButton}
-                  onPress={handleStopRun}
-                >
-                  <Icon name="stop" size={28} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
         </ScrollView>
       </Animated.View>
@@ -1395,7 +1536,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#03080E',
   },
   mapContainer: {
     flex: 1,
@@ -1403,367 +1544,355 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  headerOverlay: {
+  mapAtmosphere: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  gridScrim: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  scanline: {
     position: 'absolute',
-    top: 50,
-    left: 16,
-    right: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 12,
-    padding: 12,
+    left: 0,
+    right: 0,
+    top: '24%',
+    height: 1,
+    backgroundColor: 'rgba(41, 240, 215, 0.12)',
   },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  scanlineMid: {
+    top: '54%',
+    backgroundColor: 'rgba(255, 211, 77, 0.1)',
   },
-  title: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  claimButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 4,
-  },
-  claimButtonText: {
-    color: '#000',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  statusItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statusText: {
-    color: '#aaa',
-    fontSize: 12,
+  scanlineBottom: {
+    top: '82%',
+    backgroundColor: 'rgba(255, 122, 69, 0.12)',
   },
   overlayChipsContainer: {
     position: 'absolute',
-    top: 140,
+    top: 244,
     left: 0,
-    right: 0,
-    paddingHorizontal: 16,
+    right: 86,
+    paddingLeft: 16,
   },
   overlayChipsContent: {
-    paddingRight: 16,
     gap: 8,
+    paddingRight: 16,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
     gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: 'rgba(9, 15, 24, 0.84)',
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
-  filterChipActive: {
-    backgroundColor: '#52FF30',
-    borderColor: '#52FF30',
+  filterChipActiveTeal: {
+    backgroundColor: '#29F0D7',
+    borderColor: '#9FFFF3',
+  },
+  filterChipActiveGold: {
+    backgroundColor: '#FFD34D',
+    borderColor: '#FFEEA8',
+  },
+  filterChipActiveOrange: {
+    backgroundColor: '#FF7A45',
+    borderColor: '#FFC2AA',
   },
   filterChipText: {
-    color: '#fff',
+    color: '#F1F5FA',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  filterChipTextActive: {
-    color: '#000',
+  filterChipTextDark: {
+    color: '#051217',
+  },
+  filterChipTextDarkWarm: {
+    color: '#1E1104',
+  },
+  legend: {
+    position: 'absolute',
+    left: 16,
+    bottom: 308,
+    backgroundColor: 'rgba(8, 13, 20, 0.88)',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  legendSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginVertical: 4,
+  },
+  legendOwned: {
+    backgroundColor: '#29F0D7',
+  },
+  legendEnemy: {
+    backgroundColor: '#FF7A45',
+  },
+  legendContested: {
+    backgroundColor: '#FFD34D',
+  },
+  legendRoute: {
+    backgroundColor: '#29F0D7',
+    opacity: 0.7,
+  },
+  legendText: {
+    color: '#D7DFED',
+    fontSize: 11,
+    fontWeight: '700',
   },
   mapControls: {
     position: 'absolute',
     right: 16,
-    top: 190,
-    gap: 8,
+    top: 248,
+    gap: 10,
   },
   controlButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 8,
-    padding: 10,
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: 'rgba(10, 16, 25, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  bottomSheet: {
+  startFab: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    right: 16,
+    bottom: 304,
+    borderRadius: 22,
+    overflow: 'hidden',
+    shadowColor: '#FFB72E',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  dragHandleContainer: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  dragHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#444',
-    borderRadius: 2,
-  },
-  statsSection: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  statsGrid: {
+  startFabGradient: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-  },
-  statItem: {
     alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 15,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#FFE89A',
   },
-  statLabel: {
-    color: '#888',
-    fontSize: 12,
-    marginBottom: 4,
+  startFabText: {
+    color: '#121417',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
-  statValue: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
+  loopReadyBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 404,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFD34D',
+    borderRadius: 18,
+    paddingVertical: 13,
+    borderWidth: 2,
+    borderColor: '#FFF0AE',
   },
-  statUnit: {
-    color: '#52FF30',
+  loopReadyText: {
+    color: '#121417',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  markerWrapper: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerPulse: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+  },
+  markerBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerBadgeOwned: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  captureCelebration: {
+    position: 'absolute',
+    top: 198,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(8, 15, 25, 0.95)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 211, 77, 0.25)',
+  },
+  captureTextWrap: {
+    alignItems: 'flex-start',
+  },
+  captureTitle: {
+    color: '#FFF4C7',
+    fontSize: 16,
+    fontWeight: '900',
+    fontFamily: HEADER_FONT,
+  },
+  captureSubtitle: {
+    color: '#C5D1E0',
     fontSize: 12,
     marginTop: 2,
   },
-  timerSection: {
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingVertical: 16,
-    backgroundColor: '#252525',
-    borderRadius: 12,
-  },
-  timerLabel: {
-    color: '#888',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  timerValue: {
-    color: '#52FF30',
-    fontSize: 48,
-    fontWeight: 'bold',
-    fontVariant: ['tabular-nums'],
-  },
-  secondaryStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 24,
-  },
-  secondaryStatItem: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  secondaryStatValue: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  secondaryStatLabel: {
-    color: '#666',
-    fontSize: 11,
-  },
-  controlsSection: {
-    paddingBottom: 40,
-  },
-  startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#52FF30',
-    paddingVertical: 16,
-    borderRadius: 30,
-    gap: 8,
-  },
-  startButtonText: {
-    color: '#000',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  runningControls: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-  },
-  pauseButton: {
-    backgroundColor: '#FF9500',
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resumeButton: {
-    backgroundColor: '#52FF30',
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stopButton: {
-    backgroundColor: '#FF3B30',
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   overlayBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(2, 4, 8, 0.72)',
   },
   mapTypeOverlay: {
-    backgroundColor: '#1C1C1E',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
+    backgroundColor: '#0D1721',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingBottom: 38,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   overlayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   overlayTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
+    color: '#FFF5CF',
+    fontSize: 24,
+    fontWeight: '900',
+    fontFamily: HEADER_FONT,
   },
   overlaySection: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  sectionTitle: {
-    color: '#8E8E93',
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  mapTypeOptions: {
-    gap: 8,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    gap: 10,
   },
   mapTypeOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#2C2C2E',
     gap: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   mapTypeOptionActive: {
-    backgroundColor: 'rgba(82, 255, 48, 0.1)',
-    borderWidth: 1,
-    borderColor: '#52FF30',
-  },
-  overlayToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#2C2C2E',
-    gap: 12,
-  },
-  overlayToggleActive: {
-    backgroundColor: 'rgba(82, 255, 48, 0.1)',
-    borderWidth: 1,
-    borderColor: '#52FF30',
+    backgroundColor: 'rgba(255, 211, 77, 0.09)',
+    borderColor: 'rgba(255, 211, 77, 0.25)',
   },
   mapTypeText: {
     flex: 1,
-    color: '#fff',
+    color: '#E7EEF8',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   mapTypeTextActive: {
-    color: '#52FF30',
+    color: '#FFF1B2',
   },
-  territoryModalCard: {
-    marginHorizontal: 16,
-    marginBottom: 24,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#1C1C1E',
+  bottomSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(6, 11, 18, 0.98)',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  territoryOwnerRow: {
-    flexDirection: 'row',
+  dragHandleContainer: {
     alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  dragHandle: {
+    width: 58,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 211, 77, 0.5)',
+  },
+  bottomSheetEyebrow: {
+    marginTop: 10,
+    color: '#FFD34D',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  sheetScroll: {
     flex: 1,
-    marginRight: 12,
   },
-  territoryOwnerDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  territoryInfoGrid: {
-    gap: 10,
-  },
-  territoryInfoItem: {
-    backgroundColor: '#2C2C2E',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  territoryInfoValue: {
-    color: '#fff',
-    marginTop: 2,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  territoryActionsRow: {
-    marginTop: 14,
-    gap: 10,
-  },
-  territoryActionButton: {
+  quickStatsRow: {
     flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingBottom: 42,
+  },
+  quickStatCard: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  territoryActionPrimary: {
-    backgroundColor: '#52FF30',
-  },
-  territoryActionSecondary: {
-    backgroundColor: '#2C2C2E',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 18,
+    paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#3A3A3C',
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  territoryActionDisabled: {
-    opacity: 0.45,
+  quickStatValue: {
+    color: '#F6F8FD',
+    fontSize: 17,
+    fontWeight: '900',
+    fontFamily: HEADER_FONT,
+    marginTop: 4,
   },
-  territoryActionText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  territoryActionTextDark: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: '700',
+  quickStatLabel: {
+    color: '#98A6C0',
+    fontSize: 11,
+    marginTop: 2,
   },
 });
 

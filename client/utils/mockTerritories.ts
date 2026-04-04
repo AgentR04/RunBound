@@ -4,14 +4,16 @@ import { LocationPoint } from './gpsTracking';
 const GRID_CELL_SIZE_METERS = 500;
 const GRID_CELL_AREA_KM2 = (GRID_CELL_SIZE_METERS * GRID_CELL_SIZE_METERS) / 1_000_000;
 const GRID_RADIUS = 5; // Produces an 11x11 square-grid neighborhood
+const DEFAULT_MUMBAI_LAT = 19.076;
+const DEFAULT_MUMBAI_LNG = 72.8777;
 
 const MOCK_OWNERS = [
-    { ownerId: 'mock-user-1', ownerName: 'Alex', ownerColor: '#52FF30' },
-    { ownerId: 'mock-user-2', ownerName: 'Sam', ownerColor: '#2EC4FF' },
-    { ownerId: 'mock-user-3', ownerName: 'Jordan', ownerColor: '#FF6B35' },
-    { ownerId: 'mock-user-4', ownerName: 'Taylor', ownerColor: '#FFD166' },
-    { ownerId: 'mock-user-5', ownerName: 'Casey', ownerColor: '#D76CFF' },
-    { ownerId: 'mock-user-6', ownerName: 'Riley', ownerColor: '#43C59E' },
+    { ownerId: 'mock-user-1', ownerName: 'Kabir', ownerColor: '#52FF30' },
+    { ownerId: 'mock-user-2', ownerName: 'Ananya', ownerColor: '#2EC4FF' },
+    { ownerId: 'mock-user-3', ownerName: 'Rohan', ownerColor: '#FF6B35' },
+    { ownerId: 'mock-user-4', ownerName: 'Meera', ownerColor: '#FFD166' },
+    { ownerId: 'mock-user-5', ownerName: 'Ishaan', ownerColor: '#D76CFF' },
+    { ownerId: 'mock-user-6', ownerName: 'Kavya', ownerColor: '#43C59E' },
 ];
 
 function metersToLat(meters: number): number {
@@ -24,24 +26,6 @@ function metersToLng(meters: number, atLatitude: number): number {
     return meters / (111_320 * safeCos);
 }
 
-function squareBoundary(
-    centerLat: number,
-    centerLng: number,
-    sideMeters: number,
-    timestamp: number
-): LocationPoint[] {
-    const half = sideMeters / 2;
-    const dLat = metersToLat(half);
-    const dLng = metersToLng(half, centerLat);
-
-    return [
-        { latitude: centerLat - dLat, longitude: centerLng - dLng, timestamp },
-        { latitude: centerLat - dLat, longitude: centerLng + dLng, timestamp },
-        { latitude: centerLat + dLat, longitude: centerLng + dLng, timestamp },
-        { latitude: centerLat + dLat, longitude: centerLng - dLng, timestamp },
-    ];
-}
-
 function parseCellKey(key: string): { row: number; col: number } {
     const [row, col] = key.split(':').map(Number);
     return { row, col };
@@ -51,6 +35,16 @@ function cellKey(row: number, col: number): string {
     return `${row}:${col}`;
 }
 
+function hashValue(seed: string): number {
+    let hash = 0;
+
+    for (let i = 0; i < seed.length; i += 1) {
+        hash = (hash * 33 + seed.charCodeAt(i)) % 2147483647;
+    }
+
+    return Math.abs(hash);
+}
+
 function componentBoundary(
     centerLat: number,
     centerLng: number,
@@ -58,40 +52,46 @@ function componentBoundary(
     maxRow: number,
     minCol: number,
     maxCol: number,
-    timestamp: number
+    timestamp: number,
+    seed: string
 ): LocationPoint[] {
-    const minY = (minRow - 0.5) * GRID_CELL_SIZE_METERS;
-    const maxY = (maxRow + 0.5) * GRID_CELL_SIZE_METERS;
-    const minX = (minCol - 0.5) * GRID_CELL_SIZE_METERS;
-    const maxX = (maxCol + 0.5) * GRID_CELL_SIZE_METERS;
+    const centerRow = (minRow + maxRow) / 2;
+    const centerCol = (minCol + maxCol) / 2;
+    const halfHeightMeters = ((maxRow - minRow + 1) * GRID_CELL_SIZE_METERS) / 2;
+    const halfWidthMeters = ((maxCol - minCol + 1) * GRID_CELL_SIZE_METERS) / 2;
+    const pointCount = 9;
+    const boundary: LocationPoint[] = [];
 
-    return [
-        {
-            latitude: centerLat + metersToLat(minY),
-            longitude: centerLng + metersToLng(minX, centerLat),
+    for (let i = 0; i < pointCount; i += 1) {
+        const angle = (Math.PI * 2 * i) / pointCount;
+        const wobbleSeed = hashValue(`${seed}:${i}`);
+        const radialScale = 0.68 + (wobbleSeed % 32) / 100;
+        const twist = ((Math.floor(wobbleSeed / 8) % 11) - 5) * 0.04;
+        const extraX = (((Math.floor(wobbleSeed / 32) % 17) - 8) / 8) * 60;
+        const extraY = (((Math.floor(wobbleSeed / 128) % 17) - 8) / 8) * 60;
+
+        const xMeters =
+            (centerCol * GRID_CELL_SIZE_METERS) +
+            Math.cos(angle + twist) * halfWidthMeters * radialScale +
+            extraX;
+        const yMeters =
+            (centerRow * GRID_CELL_SIZE_METERS) +
+            Math.sin(angle - twist) * halfHeightMeters * radialScale +
+            extraY;
+
+        boundary.push({
+            latitude: centerLat + metersToLat(yMeters),
+            longitude: centerLng + metersToLng(xMeters, centerLat),
             timestamp,
-        },
-        {
-            latitude: centerLat + metersToLat(minY),
-            longitude: centerLng + metersToLng(maxX, centerLat),
-            timestamp,
-        },
-        {
-            latitude: centerLat + metersToLat(maxY),
-            longitude: centerLng + metersToLng(maxX, centerLat),
-            timestamp,
-        },
-        {
-            latitude: centerLat + metersToLat(maxY),
-            longitude: centerLng + metersToLng(minX, centerLat),
-            timestamp,
-        },
-    ];
+        });
+    }
+
+    return boundary;
 }
 
 export function getMockTerritories(
-    centerLat: number = 40.6782,
-    centerLng: number = -73.9442
+    centerLat: number = DEFAULT_MUMBAI_LAT,
+    centerLng: number = DEFAULT_MUMBAI_LNG
 ): Territory[] {
     const now = Date.now();
     const territories: Territory[] = [];
@@ -174,7 +174,16 @@ export function getMockTerritories(
             ownerId: owner.ownerId,
             ownerName: owner.ownerName,
             ownerColor: owner.ownerColor,
-            boundary: componentBoundary(centerLat, centerLng, minRow, maxRow, minCol, maxCol, now),
+            boundary: componentBoundary(
+                centerLat,
+                centerLng,
+                minRow,
+                maxRow,
+                minCol,
+                maxCol,
+                now,
+                `region-${regionIndex}-owner-${ownerIndex}`
+            ),
             area: cellCount * GRID_CELL_AREA_KM2,
             claimedAt: new Date(now - ageDays * 86_400_000),
             lastDefended: null,
