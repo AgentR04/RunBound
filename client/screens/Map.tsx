@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -14,10 +14,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { Polygon, Polyline, Region, Circle } from 'react-native-maps';
+import MapView, { Circle, Polygon, Polyline, Region } from 'react-native-maps';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useSocket } from '../context/SocketContext';
-import { claimTerritory as apiClaimTerritory, fetchTerritories } from '../services/api';
+import {
+  claimTerritory as apiClaimTerritory,
+  fetchTerritories,
+} from '../services/api';
 import { ActiveRun, Run, Territory } from '../types/game';
 import {
   calculateCalories,
@@ -26,17 +29,19 @@ import {
   calculateSpeed,
   LocationPoint,
 } from '../utils/gpsTracking';
-import {
-  saveRun,
-  saveTerritory,
-  updateUserStats,
-} from '../utils/storage';
+import { getMockTerritories } from '../utils/mockTerritories';
+import { saveRun, saveTerritory, updateUserStats } from '../utils/storage';
 import { isNearStartPoint, isValidTerritory } from '../utils/territoryUtils';
+import {
+  DEFAULT_GRID_CELL_SIZE_METERS,
+  getGridCellsForPolygon,
+} from '../utils/territoryUtilsNew';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const COLLAPSED_HEIGHT = 200;
 const HALF_HEIGHT = SCREEN_HEIGHT * 0.5;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.85;
+const CURRENT_USER_ID = 'user-1';
 
 const RunMap = ({ navigation }: { navigation: any }) => {
   const { socket } = useSocket();
@@ -61,8 +66,15 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     latitudeDelta: 0.01,
     longitudeDelta: 0.01,
   });
-  const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid'>('standard');
+  const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid'>(
+    'standard',
+  );
   const [showMapTypeOverlay, setShowMapTypeOverlay] = useState(false);
+  const [showTerritoryModal, setShowTerritoryModal] = useState(false);
+  const [selectedTerritory, setSelectedTerritory] = useState<Territory | null>(
+    null,
+  );
+  const [useMockTerritories, setUseMockTerritories] = useState(__DEV__);
   const [overlays, setOverlays] = useState({
     territories: true,
     myRoutes: false,
@@ -70,11 +82,14 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     popularRoutes: false,
     elevation: false,
   });
-  const [heatmapPoints, setHeatmapPoints] = useState<Array<{ lat: number; lng: number; intensity: number }>>([]);
+  const [heatmapPoints, setHeatmapPoints] = useState<
+    Array<{ lat: number; lng: number; intensity: number }>
+  >([]);
 
   // === ALL useRef HOOKS ===
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMounted = useRef(true);
+  const mockSeedKeyRef = useRef<string>('');
   const mapRef = useRef<MapView>(null);
   const sheetHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const lastSheetHeight = useRef(COLLAPSED_HEIGHT);
@@ -103,7 +118,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       const nextPoint = snapPoints.find(p => p > lastSheetHeight.current);
       return nextPoint || EXPANDED_HEIGHT;
     } else if (gestureDirection > 10) {
-      const nextPoint = [...snapPoints].reverse().find(p => p < lastSheetHeight.current);
+      const nextPoint = [...snapPoints]
+        .reverse()
+        .find(p => p < lastSheetHeight.current);
       return nextPoint || COLLAPSED_HEIGHT;
     }
     return lastSheetHeight.current;
@@ -113,22 +130,28 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${hrs.toString().padStart(2, '0')}:${mins
+      .toString()
+      .padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const getSafePace = () => {
     try {
       const minimumDistance = 0.005; // 5 meters minimum for meaningful pace
-      return activeRun.distance > minimumDistance ? calculatePace(activeRun.distance, timer) : "0'00\"";
+      return activeRun.distance > minimumDistance
+        ? calculatePace(activeRun.distance, timer)
+        : '0\'00"';
     } catch {
-      return "0'00\"";
+      return '0\'00"';
     }
   };
 
   const getSafeSpeed = () => {
     try {
       const minimumDistance = 0.005; // 5 meters minimum for meaningful speed
-      return activeRun.distance > minimumDistance ? calculateSpeed(activeRun.distance, timer).toFixed(1) : '0.0';
+      return activeRun.distance > minimumDistance
+        ? calculateSpeed(activeRun.distance, timer).toFixed(1)
+        : '0.0';
     } catch {
       return '0.0';
     }
@@ -142,22 +165,26 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const generateHeatmapPoints = (centerLat: number, centerLng: number, count: number = 100) => {
+  const generateHeatmapPoints = (
+    centerLat: number,
+    centerLng: number,
+    count: number = 100,
+  ) => {
     const points = [];
     const radius = 0.02; // ~2km radius
-    
+
     for (let i = 0; i < count; i++) {
       // Random point within radius
       const angle = Math.random() * 2 * Math.PI;
       const distance = Math.random() * radius;
-      
+
       const lat = centerLat + distance * Math.cos(angle);
       const lng = centerLng + distance * Math.sin(angle);
       const intensity = Math.random(); // 0-1 intensity
-      
+
       points.push({ lat, lng, intensity });
     }
-    
+
     return points;
   };
 
@@ -170,11 +197,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
       {
         title: 'Location Permission',
-        message: 'RunBound needs access to your location to track your runs and claim territory.',
+        message:
+          'RunBound needs access to your location to track your runs and claim territory.',
         buttonNeutral: 'Ask Me Later',
         buttonNegative: 'Cancel',
         buttonPositive: 'OK',
-      }
+      },
     );
 
     return result === PermissionsAndroid.RESULTS.GRANTED;
@@ -186,8 +214,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       onStartShouldSetPanResponder: () => !isAnimating.current,
       onMoveShouldSetPanResponder: (_, gestureState) => {
         if (isAnimating.current) return false;
-        const isDraggingVertically = Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
-        if (lastSheetHeight.current === EXPANDED_HEIGHT && gestureState.dy < 0) {
+        const isDraggingVertically =
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+        if (
+          lastSheetHeight.current === EXPANDED_HEIGHT &&
+          gestureState.dy < 0
+        ) {
           return false;
         }
         return isDraggingVertically && Math.abs(gestureState.dy) > 5;
@@ -205,7 +237,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         const targetHeight = getNextSnapPoint(gestureState.dy);
         snapToPosition(targetHeight);
       },
-    })
+    }),
   ).current;
 
   // === ALL useEffect HOOKS ===
@@ -224,17 +256,56 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   // Load territories from server on mount, fall back to local storage
   useEffect(() => {
     const loadData = async () => {
+      if (useMockTerritories) {
+        const centerLat = userLocation?.latitude ?? mapRegion.latitude;
+        const centerLng = userLocation?.longitude ?? mapRegion.longitude;
+
+        if (isMounted.current) {
+          setTerritories(getMockTerritories(centerLat, centerLng));
+        }
+        return;
+      }
+
       try {
         const loaded = await fetchTerritories();
         if (isMounted.current) {
-          setTerritories(loaded as Territory[]);
+          if (Array.isArray(loaded) && loaded.length > 0) {
+            setTerritories(loaded as Territory[]);
+          } else {
+            setTerritories(
+              getMockTerritories(mapRegion.latitude, mapRegion.longitude),
+            );
+          }
         }
       } catch {
-        // Server unavailable — nothing to show yet
+        if (isMounted.current) {
+          setTerritories(
+            getMockTerritories(mapRegion.latitude, mapRegion.longitude),
+          );
+        }
       }
     };
     loadData();
-  }, []);
+  }, [useMockTerritories]);
+
+  // When mock mode is enabled and GPS becomes available, reseed around the live location.
+  useEffect(() => {
+    if (!useMockTerritories || !userLocation || !isMounted.current) {
+      return;
+    }
+
+    const seedKey = `${userLocation.latitude.toFixed(
+      3,
+    )},${userLocation.longitude.toFixed(3)}`;
+    if (mockSeedKeyRef.current === seedKey) {
+      return;
+    }
+
+    mockSeedKeyRef.current = seedKey;
+    setTerritories(
+      getMockTerritories(userLocation.latitude, userLocation.longitude),
+    );
+  }, [useMockTerritories, userLocation?.latitude, userLocation?.longitude]);
 
   // Real-time: merge incoming territories from other players
   useEffect(() => {
@@ -261,14 +332,17 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       // Wait for all interactions/animations to complete before requesting permission
       const handle = InteractionManager.runAfterInteractions(async () => {
         if (!isMounted.current) return;
-        
+
         try {
           const granted = await requestForegroundLocationPermission();
           if (isMounted.current) {
             setHasLocationPermission(granted);
           }
           if (!granted) {
-            Alert.alert('Permission Required', 'Location permission required to track runs');
+            Alert.alert(
+              'Permission Required',
+              'Location permission required to track runs',
+            );
           }
         } catch (error) {
           console.error('Permission error:', error);
@@ -304,7 +378,10 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   // Generate heatmap when overlay is toggled
   useEffect(() => {
     if (overlays.heatmap && userLocation) {
-      const points = generateHeatmapPoints(userLocation.latitude, userLocation.longitude);
+      const points = generateHeatmapPoints(
+        userLocation.latitude,
+        userLocation.longitude,
+      );
       setHeatmapPoints(points);
     } else {
       setHeatmapPoints([]);
@@ -312,20 +389,72 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   }, [overlays.heatmap, userLocation?.latitude, userLocation?.longitude]);
 
   // === EVENT HANDLERS ===
-  
+
   const handleCenterOnUser = () => {
     if (userLocation && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 500);
+      mapRef.current.animateToRegion(
+        {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        },
+        500,
+      );
     }
   };
 
   const handleToggleMapType = () => {
     setShowMapTypeOverlay(true);
+  };
+
+  const handleTerritoryPress = (territory: Territory) => {
+    setSelectedTerritory(territory);
+    setShowTerritoryModal(true);
+  };
+
+  const closeTerritoryModal = () => {
+    setShowTerritoryModal(false);
+    setSelectedTerritory(null);
+  };
+
+  const handleViewOwnerProfile = () => {
+    if (!selectedTerritory) return;
+
+    closeTerritoryModal();
+    navigation.navigate('Profile');
+    Alert.alert(
+      'Owner Profile',
+      `Showing profile screen. Territory owner: ${selectedTerritory.ownerName}`,
+    );
+  };
+
+  const handleChallengeTerritory = () => {
+    if (!selectedTerritory) return;
+
+    if (selectedTerritory.ownerId === CURRENT_USER_ID) {
+      Alert.alert(
+        'Cannot Challenge',
+        'You cannot challenge your own territory.',
+      );
+      return;
+    }
+
+    setTerritories(prev =>
+      prev.map(territory =>
+        territory.id === selectedTerritory.id
+          ? { ...territory, isUnderChallenge: true }
+          : territory,
+      ),
+    );
+    setSelectedTerritory(prev =>
+      prev ? { ...prev, isUnderChallenge: true } : prev,
+    );
+
+    Alert.alert(
+      'Challenge Started',
+      `You have challenged ${selectedTerritory.ownerName}'s territory.`,
+    );
   };
 
   const handleSelectMapType = (type: 'standard' | 'satellite' | 'hybrid') => {
@@ -336,15 +465,19 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   const handleToggleOverlay = (overlayKey: keyof typeof overlays) => {
     setOverlays(prev => ({ ...prev, [overlayKey]: !prev[overlayKey] }));
   };
-  
+
   const handleStartRun = async () => {
     try {
-      const permissionGranted = hasLocationPermission || await requestForegroundLocationPermission();
+      const permissionGranted =
+        hasLocationPermission || (await requestForegroundLocationPermission());
       if (!permissionGranted) {
         if (isMounted.current) {
           setHasLocationPermission(false);
         }
-        Alert.alert('Permission Required', 'Location permission required to track runs');
+        Alert.alert(
+          'Permission Required',
+          'Location permission required to track runs',
+        );
         return;
       }
 
@@ -353,7 +486,10 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       }
 
       if (!userLocation) {
-        Alert.alert('Locating You', 'Waiting for GPS signal. Keep the map open briefly and tap Start Run again.');
+        Alert.alert(
+          'Locating You',
+          'Waiting for GPS signal. Keep the map open briefly and tap Start Run again.',
+        );
         return;
       }
 
@@ -440,7 +576,10 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   const handleClaimTerritory = async () => {
     try {
       if (activeRun.path.length < 10) {
-        Alert.alert('Territory Too Small', 'Run a longer path to create a territory!');
+        Alert.alert(
+          'Territory Too Small',
+          'Run a longer path to create a territory!',
+        );
         return;
       }
 
@@ -451,30 +590,52 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
       const validation = isValidTerritory(polygon);
       if (!validation.valid) {
-        Alert.alert('Cannot Claim Territory', validation.reason || 'Invalid territory');
+        Alert.alert(
+          'Cannot Claim Territory',
+          validation.reason || 'Invalid territory',
+        );
+        return;
+      }
+
+      const claimedCells = getGridCellsForPolygon(
+        polygon,
+        DEFAULT_GRID_CELL_SIZE_METERS,
+      );
+      if (claimedCells.length === 0) {
+        Alert.alert(
+          'Cannot Claim Territory',
+          `Your loop does not fully enclose a ${DEFAULT_GRID_CELL_SIZE_METERS}m grid cell yet. Make a larger loop and try again.`,
+        );
         return;
       }
 
       const pace = getSafePace();
       const speed = getSafeSpeed();
       const calories = getSafeCalories();
+      const runId = `run-${Date.now()}`;
+      const claimedAt = new Date();
 
-      const newTerritory: Territory = {
-        id: `territory-${Date.now()}`,
+      const newTerritories: Territory[] = claimedCells.map(cell => ({
+        id: `territory-${cell.id}-${Date.now()}`,
         ownerId: 'user-1',
         ownerName: 'You',
         ownerColor: '#52FF30',
-        boundary: activeRun.path,
-        area: validation.area || 0,
-        claimedAt: new Date(),
+        boundary: cell.boundary,
+        area: cell.areaKm2,
+        claimedAt,
         lastDefended: null,
         strength: 100,
         isUnderChallenge: false,
-        runId: `run-${Date.now()}`,
-      };
+        runId,
+      }));
+
+      const totalClaimedArea = newTerritories.reduce(
+        (sum, territory) => sum + territory.area,
+        0,
+      );
 
       const completedRun: Run = {
-        id: newTerritory.runId,
+        id: runId,
         userId: 'user-1',
         startTime: activeRun.startTime || new Date(),
         endTime: new Date(),
@@ -484,38 +645,58 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         averagePace: pace,
         averageSpeed: parseFloat(speed),
         isLoop: true,
-        territoryClaimed: newTerritory.id,
+        territoryClaimed: newTerritories[0].id,
         territoriesChallenged: [],
         calories: calories,
       };
 
-      await Promise.all([
-        saveTerritory(newTerritory),
+      const saveTasks: Array<Promise<unknown>> = [
         saveRun(completedRun),
-        updateUserStats(activeRun.distance, validation.area),
-        // Persist to server + broadcast to all connected clients
-        apiClaimTerritory({
-          territory: newTerritory,
-          run: {
-            id: completedRun.id,
-            distance: completedRun.distance,
-            duration: completedRun.duration,
-            averagePace: completedRun.averagePace,
-            averageSpeed: completedRun.averageSpeed,
-            calories: completedRun.calories,
-            path: activeRun.path,
-          },
-        }).catch(err => console.warn('[api] territory claim failed:', err.message)),
-      ]);
+        updateUserStats(activeRun.distance, totalClaimedArea),
+      ];
+
+      for (let i = 0; i < newTerritories.length; i++) {
+        const territory = newTerritories[i];
+        saveTasks.push(saveTerritory(territory));
+        const payload =
+          i === 0
+            ? {
+                territory,
+                run: {
+                  id: completedRun.id,
+                  distance: completedRun.distance,
+                  duration: completedRun.duration,
+                  averagePace: completedRun.averagePace,
+                  averageSpeed: completedRun.averageSpeed,
+                  calories: completedRun.calories,
+                  path: activeRun.path,
+                },
+              }
+            : { territory };
+
+        saveTasks.push(
+          apiClaimTerritory(payload).catch(err =>
+            console.warn('[api] territory claim failed:', err.message),
+          ),
+        );
+      }
+
+      await Promise.all(saveTasks);
 
       if (isMounted.current) {
-        setTerritories(prev => [...prev, newTerritory]);
+        setTerritories(prev => [...prev, ...newTerritories]);
       }
 
       Alert.alert(
         '🏆 Territory Claimed!',
-        `Area: ${((validation.area || 0) * 1_000_000).toFixed(0)}m²\nDistance: ${activeRun.distance.toFixed(2)}km\nTime: ${formatTime(timer)}`,
-        [{ text: 'Awesome!', style: 'default' }]
+        `Cells: ${
+          newTerritories.length
+        } (${DEFAULT_GRID_CELL_SIZE_METERS}m grid)\nArea: ${(
+          totalClaimedArea * 1_000_000
+        ).toFixed(0)}m²\nDistance: ${activeRun.distance.toFixed(
+          2,
+        )}km\nTime: ${formatTime(timer)}`,
+        [{ text: 'Awesome!', style: 'default' }],
       );
 
       handleStopRun();
@@ -540,19 +721,27 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           style={styles.map}
           mapType={mapType}
           initialRegion={mapRegion}
-          region={userLocation ? {
-            latitude: userLocation.latitude,
-            longitude: userLocation.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          } : mapRegion}
+          region={
+            userLocation
+              ? {
+                  latitude: userLocation.latitude,
+                  longitude: userLocation.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }
+              : mapRegion
+          }
           showsUserLocation={hasLocationPermission}
           showsMyLocationButton={false}
           followsUserLocation={activeRun.state === 'running'}
           onRegionChangeComplete={setMapRegion}
-          onUserLocationChange={(event) => {
+          onUserLocationChange={event => {
             const { coordinate } = event.nativeEvent;
-            if (!coordinate || typeof coordinate.latitude !== 'number' || typeof coordinate.longitude !== 'number') {
+            if (
+              !coordinate ||
+              typeof coordinate.latitude !== 'number' ||
+              typeof coordinate.longitude !== 'number'
+            ) {
               return;
             }
 
@@ -575,85 +764,103 @@ const RunMap = ({ navigation }: { navigation: any }) => {
               setActiveRun(prev => {
                 const newPath = [...prev.path, location];
                 const newDistance = calculatePathDistance(newPath);
-                const isNear = prev.path.length > 10 && isNearStartPoint(location, prev.path[0]);
-                return { ...prev, path: newPath, distance: newDistance, isNearStart: isNear };
+                const isNear =
+                  prev.path.length > 10 &&
+                  isNearStartPoint(location, prev.path[0]);
+                return {
+                  ...prev,
+                  path: newPath,
+                  distance: newDistance,
+                  isNearStart: isNear,
+                };
               });
             }
           }}
         >
           {/* Render existing territories */}
-          {overlays.territories && territories.map(territory => {
-            try {
-              const validBoundary = territory.boundary.filter(
-                p => typeof p.latitude === 'number' && typeof p.longitude === 'number'
-              );
-              if (validBoundary.length < 3) return null;
-              
-              // Convert hex color to rgba with transparency
-              const hexToRgba = (hex: string, alpha: number) => {
-                const r = parseInt(hex.slice(1, 3), 16);
-                const g = parseInt(hex.slice(3, 5), 16);
-                const b = parseInt(hex.slice(5, 7), 16);
-                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-              };
+          {overlays.territories &&
+            territories.map(territory => {
+              try {
+                const validBoundary = territory.boundary.filter(
+                  p =>
+                    typeof p.latitude === 'number' &&
+                    typeof p.longitude === 'number',
+                );
+                if (validBoundary.length < 3) return null;
 
-              return (
-                <Polygon
-                  key={territory.id}
-                  coordinates={validBoundary}
-                  fillColor={hexToRgba(territory.ownerColor, 0.3)}
-                  strokeColor={territory.ownerColor}
-                  strokeWidth={2}
-                />
-              );
-            } catch {
-              return null;
-            }
-          })}
+                // Convert hex color to rgba with transparency
+                const hexToRgba = (hex: string, alpha: number) => {
+                  const r = parseInt(hex.slice(1, 3), 16);
+                  const g = parseInt(hex.slice(3, 5), 16);
+                  const b = parseInt(hex.slice(5, 7), 16);
+                  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                };
+
+                return (
+                  <Polygon
+                    key={territory.id}
+                    coordinates={validBoundary}
+                    fillColor={hexToRgba(territory.ownerColor, 0.3)}
+                    strokeColor={territory.ownerColor}
+                    strokeWidth={2}
+                    tappable
+                    onPress={() => handleTerritoryPress(territory)}
+                  />
+                );
+              } catch {
+                return null;
+              }
+            })}
 
           {/* Render active run path */}
-          {activeRun.state !== 'idle' && activeRun.path.length > 1 && (() => {
-            try {
-              const validPath = activeRun.path.filter(
-                p => typeof p.latitude === 'number' && typeof p.longitude === 'number'
-              );
-              if (validPath.length < 2) return null;
-              return (
-                <Polyline
-                  key="active-path"
-                  coordinates={validPath}
-                  strokeColor={activeRun.isNearStart ? '#FFD700' : '#52FF30'}
-                  strokeWidth={activeRun.isNearStart ? 6 : 4}
-                  lineCap="round"
-                  lineJoin="round"
-                />
-              );
-            } catch {
-              return null;
-            }
-          })()}
+          {activeRun.state !== 'idle' &&
+            activeRun.path.length > 1 &&
+            (() => {
+              try {
+                const validPath = activeRun.path.filter(
+                  p =>
+                    typeof p.latitude === 'number' &&
+                    typeof p.longitude === 'number',
+                );
+                if (validPath.length < 2) return null;
+                return (
+                  <Polyline
+                    key="active-path"
+                    coordinates={validPath}
+                    strokeColor={activeRun.isNearStart ? '#FFD700' : '#52FF30'}
+                    strokeWidth={activeRun.isNearStart ? 6 : 4}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                );
+              } catch {
+                return null;
+              }
+            })()}
 
           {/* Render heatmap dots */}
-          {overlays.heatmap && heatmapPoints.map((point, index) => (
-            <Circle
-              key={`heatmap-${index}`}
-              center={{ latitude: point.lat, longitude: point.lng }}
-              radius={20 + point.intensity * 30} // Radius 20-50m based on intensity
-              fillColor={`rgba(255, 107, 53, ${0.3 + point.intensity * 0.5})`} // Orange with varying opacity
-              strokeColor="transparent"
-            />
-          ))}
+          {overlays.heatmap &&
+            heatmapPoints.map((point, index) => (
+              <Circle
+                key={`heatmap-${index}`}
+                center={{ latitude: point.lat, longitude: point.lng }}
+                radius={20 + point.intensity * 30} // Radius 20-50m based on intensity
+                fillColor={`rgba(255, 107, 53, ${0.3 + point.intensity * 0.5})`} // Orange with varying opacity
+                strokeColor="transparent"
+              />
+            ))}
 
           {/* Render popular routes dots */}
-          {overlays.popularRoutes && heatmapPoints.map((point, index) => (
-            <Circle
-              key={`popular-${index}`}
-              center={{ latitude: point.lat, longitude: point.lng }}
-              radius={15 + point.intensity * 25}
-              fillColor={`rgba(82, 255, 48, ${0.2 + point.intensity * 0.4})`} // Green dots
-              strokeColor="transparent"
-            />
-          ))}
+          {overlays.popularRoutes &&
+            heatmapPoints.map((point, index) => (
+              <Circle
+                key={`popular-${index}`}
+                center={{ latitude: point.lat, longitude: point.lng }}
+                radius={15 + point.intensity * 25}
+                fillColor={`rgba(82, 255, 48, ${0.2 + point.intensity * 0.4})`} // Green dots
+                strokeColor="transparent"
+              />
+            ))}
         </MapView>
 
         {/* Header Overlay */}
@@ -665,7 +872,10 @@ const RunMap = ({ navigation }: { navigation: any }) => {
               {activeRun.state === 'paused' && 'Run Paused'}
             </Text>
             {activeRun.isNearStart && (
-              <TouchableOpacity style={styles.claimButton} onPress={handleClaimTerritory}>
+              <TouchableOpacity
+                style={styles.claimButton}
+                onPress={handleClaimTerritory}
+              >
                 <Icon name="trophy" size={16} color="#000" />
                 <Text style={styles.claimButtonText}>Close Loop!</Text>
               </TouchableOpacity>
@@ -674,11 +884,15 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           <View style={styles.statusBar}>
             <View style={styles.statusItem}>
               <Icon name="location" size={12} color="#52FF30" />
-              <Text style={styles.statusText}>{userLocation ? 'GPS Connected' : 'Waiting GPS...'}</Text>
+              <Text style={styles.statusText}>
+                {userLocation ? 'GPS Connected' : 'Waiting GPS...'}
+              </Text>
             </View>
             <View style={styles.statusItem}>
               <Text style={styles.statusText}>
-                {activeRun.isNearStart ? '⚡ Near Start Point!' : `${territories.length} Territories`}
+                {activeRun.isNearStart
+                  ? '⚡ Near Start Point!'
+                  : `${territories.length} Territories`}
               </Text>
             </View>
           </View>
@@ -686,73 +900,279 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
         {/* Overlay Filter Chips */}
         <View style={styles.overlayChipsContainer}>
-          <ScrollView 
-            horizontal 
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.overlayChipsContent}
           >
-            <TouchableOpacity 
-              style={[styles.filterChip, overlays.territories && styles.filterChipActive]}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                overlays.territories && styles.filterChipActive,
+              ]}
               onPress={() => handleToggleOverlay('territories')}
             >
-              <Icon name="flag" size={14} color={overlays.territories ? '#000' : '#fff'} />
-              <Text style={[styles.filterChipText, overlays.territories && styles.filterChipTextActive]}>
+              <Icon
+                name="flag"
+                size={14}
+                color={overlays.territories ? '#000' : '#fff'}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  overlays.territories && styles.filterChipTextActive,
+                ]}
+              >
                 Territories
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.filterChip, overlays.myRoutes && styles.filterChipActive]}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                overlays.myRoutes && styles.filterChipActive,
+              ]}
               onPress={() => handleToggleOverlay('myRoutes')}
             >
-              <Icon name="footsteps" size={14} color={overlays.myRoutes ? '#000' : '#fff'} />
-              <Text style={[styles.filterChipText, overlays.myRoutes && styles.filterChipTextActive]}>
+              <Icon
+                name="footsteps"
+                size={14}
+                color={overlays.myRoutes ? '#000' : '#fff'}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  overlays.myRoutes && styles.filterChipTextActive,
+                ]}
+              >
                 My Routes
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.filterChip, overlays.heatmap && styles.filterChipActive]}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                overlays.heatmap && styles.filterChipActive,
+              ]}
               onPress={() => handleToggleOverlay('heatmap')}
             >
-              <Icon name="analytics" size={14} color={overlays.heatmap ? '#000' : '#fff'} />
-              <Text style={[styles.filterChipText, overlays.heatmap && styles.filterChipTextActive]}>
+              <Icon
+                name="analytics"
+                size={14}
+                color={overlays.heatmap ? '#000' : '#fff'}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  overlays.heatmap && styles.filterChipTextActive,
+                ]}
+              >
                 Heatmap
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.filterChip, overlays.popularRoutes && styles.filterChipActive]}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                overlays.popularRoutes && styles.filterChipActive,
+              ]}
               onPress={() => handleToggleOverlay('popularRoutes')}
             >
-              <Icon name="trending-up" size={14} color={overlays.popularRoutes ? '#000' : '#fff'} />
-              <Text style={[styles.filterChipText, overlays.popularRoutes && styles.filterChipTextActive]}>
+              <Icon
+                name="trending-up"
+                size={14}
+                color={overlays.popularRoutes ? '#000' : '#fff'}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  overlays.popularRoutes && styles.filterChipTextActive,
+                ]}
+              >
                 Popular
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.filterChip, overlays.elevation && styles.filterChipActive]}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                overlays.elevation && styles.filterChipActive,
+              ]}
               onPress={() => handleToggleOverlay('elevation')}
             >
-              <Icon name="bar-chart" size={14} color={overlays.elevation ? '#000' : '#fff'} />
-              <Text style={[styles.filterChipText, overlays.elevation && styles.filterChipTextActive]}>
+              <Icon
+                name="bar-chart"
+                size={14}
+                color={overlays.elevation ? '#000' : '#fff'}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  overlays.elevation && styles.filterChipTextActive,
+                ]}
+              >
                 Elevation
               </Text>
             </TouchableOpacity>
+
+            {__DEV__ && (
+              <TouchableOpacity
+                style={[
+                  styles.filterChip,
+                  useMockTerritories && styles.filterChipActive,
+                ]}
+                onPress={() => setUseMockTerritories(prev => !prev)}
+              >
+                <Icon
+                  name="flask"
+                  size={14}
+                  color={useMockTerritories ? '#000' : '#fff'}
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    useMockTerritories && styles.filterChipTextActive,
+                  ]}
+                >
+                  Mock Territories
+                </Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
 
         {/* Map Controls */}
         <View style={styles.mapControls}>
-          <TouchableOpacity style={styles.controlButton} onPress={handleCenterOnUser}>
+          <TouchableOpacity
+            style={styles.controlButton}
+            onPress={handleCenterOnUser}
+          >
             <Icon name="navigate-outline" size={22} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.controlButton} onPress={handleToggleMapType}>
+          <TouchableOpacity
+            style={styles.controlButton}
+            onPress={handleToggleMapType}
+          >
             <Icon name="layers-outline" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Territory Detail Modal */}
+      <Modal
+        visible={showTerritoryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeTerritoryModal}
+      >
+        <TouchableOpacity
+          style={styles.overlayBackdrop}
+          activeOpacity={1}
+          onPress={closeTerritoryModal}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.territoryModalCard}
+            onPress={() => {}}
+          >
+            <View style={styles.overlayHeader}>
+              <View style={styles.territoryOwnerRow}>
+                <View
+                  style={[
+                    styles.territoryOwnerDot,
+                    {
+                      backgroundColor:
+                        selectedTerritory?.ownerColor || '#52FF30',
+                    },
+                  ]}
+                />
+                <Text style={styles.overlayTitle} numberOfLines={1}>
+                  {selectedTerritory?.ownerName || 'Unknown Owner'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={closeTerritoryModal}>
+                <Icon name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.overlaySection}>
+              <View style={styles.territoryInfoGrid}>
+                <View style={styles.territoryInfoItem}>
+                  <Text style={styles.statLabel}>Area</Text>
+                  <Text style={styles.territoryInfoValue}>
+                    {selectedTerritory
+                      ? `${Math.round(
+                          selectedTerritory.area * 1_000_000,
+                        ).toLocaleString()} m²`
+                      : '--'}
+                  </Text>
+                </View>
+                <View style={styles.territoryInfoItem}>
+                  <Text style={styles.statLabel}>Strength</Text>
+                  <Text style={styles.territoryInfoValue}>
+                    {selectedTerritory
+                      ? `${selectedTerritory.strength}%`
+                      : '--'}
+                  </Text>
+                </View>
+                <View style={styles.territoryInfoItem}>
+                  <Text style={styles.statLabel}>Claimed</Text>
+                  <Text style={styles.territoryInfoValue}>
+                    {selectedTerritory
+                      ? new Date(selectedTerritory.claimedAt).toLocaleString()
+                      : '--'}
+                  </Text>
+                </View>
+                <View style={styles.territoryInfoItem}>
+                  <Text style={styles.statLabel}>Run</Text>
+                  <Text style={styles.territoryInfoValue} numberOfLines={1}>
+                    {selectedTerritory?.runId || '--'}
+                  </Text>
+                </View>
+                <View style={styles.territoryInfoItem}>
+                  <Text style={styles.statLabel}>Status</Text>
+                  <Text style={styles.territoryInfoValue}>
+                    {selectedTerritory?.isUnderChallenge
+                      ? 'Under Challenge'
+                      : 'Secure'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.territoryActionsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.territoryActionButton,
+                    styles.territoryActionSecondary,
+                  ]}
+                  onPress={handleViewOwnerProfile}
+                >
+                  <Icon name="person-circle-outline" size={16} color="#fff" />
+                  <Text style={styles.territoryActionText}>
+                    View Owner Profile
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.territoryActionButton,
+                    styles.territoryActionPrimary,
+                    selectedTerritory?.ownerId === CURRENT_USER_ID &&
+                      styles.territoryActionDisabled,
+                  ]}
+                  onPress={handleChallengeTerritory}
+                  disabled={selectedTerritory?.ownerId === CURRENT_USER_ID}
+                >
+                  <Icon name="flash-outline" size={16} color="#000" />
+                  <Text style={styles.territoryActionTextDark}>
+                    Challenge Territory
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Map Type Overlay */}
       <Modal
@@ -761,9 +1181,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         animationType="slide"
         onRequestClose={() => setShowMapTypeOverlay(false)}
       >
-        <TouchableOpacity 
-          style={styles.overlayBackdrop} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.overlayBackdrop}
+          activeOpacity={1}
           onPress={() => setShowMapTypeOverlay(false)}
         >
           <View style={styles.mapTypeOverlay}>
@@ -773,44 +1193,85 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                 <Icon name="close" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.overlaySection}>
               <View style={styles.mapTypeOptions}>
-                <TouchableOpacity 
-                  style={[styles.mapTypeOption, mapType === 'standard' && styles.mapTypeOptionActive]}
+                <TouchableOpacity
+                  style={[
+                    styles.mapTypeOption,
+                    mapType === 'standard' && styles.mapTypeOptionActive,
+                  ]}
                   onPress={() => handleSelectMapType('standard')}
                 >
-                  <Icon name="map-outline" size={24} color={mapType === 'standard' ? '#52FF30' : '#fff'} />
-                  <Text style={[styles.mapTypeText, mapType === 'standard' && styles.mapTypeTextActive]}>
+                  <Icon
+                    name="map-outline"
+                    size={24}
+                    color={mapType === 'standard' ? '#52FF30' : '#fff'}
+                  />
+                  <Text
+                    style={[
+                      styles.mapTypeText,
+                      mapType === 'standard' && styles.mapTypeTextActive,
+                    ]}
+                  >
                     Standard
                   </Text>
-                  {mapType === 'standard' && <Icon name="checkmark-circle" size={20} color="#52FF30" />}
+                  {mapType === 'standard' && (
+                    <Icon name="checkmark-circle" size={20} color="#52FF30" />
+                  )}
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={[styles.mapTypeOption, mapType === 'satellite' && styles.mapTypeOptionActive]}
+                <TouchableOpacity
+                  style={[
+                    styles.mapTypeOption,
+                    mapType === 'satellite' && styles.mapTypeOptionActive,
+                  ]}
                   onPress={() => handleSelectMapType('satellite')}
                 >
-                  <Icon name="globe-outline" size={24} color={mapType === 'satellite' ? '#52FF30' : '#fff'} />
-                  <Text style={[styles.mapTypeText, mapType === 'satellite' && styles.mapTypeTextActive]}>
+                  <Icon
+                    name="globe-outline"
+                    size={24}
+                    color={mapType === 'satellite' ? '#52FF30' : '#fff'}
+                  />
+                  <Text
+                    style={[
+                      styles.mapTypeText,
+                      mapType === 'satellite' && styles.mapTypeTextActive,
+                    ]}
+                  >
                     Satellite
                   </Text>
-                  {mapType === 'satellite' && <Icon name="checkmark-circle" size={20} color="#52FF30" />}
+                  {mapType === 'satellite' && (
+                    <Icon name="checkmark-circle" size={20} color="#52FF30" />
+                  )}
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={[styles.mapTypeOption, mapType === 'hybrid' && styles.mapTypeOptionActive]}
+                <TouchableOpacity
+                  style={[
+                    styles.mapTypeOption,
+                    mapType === 'hybrid' && styles.mapTypeOptionActive,
+                  ]}
                   onPress={() => handleSelectMapType('hybrid')}
                 >
-                  <Icon name="layers-outline" size={24} color={mapType === 'hybrid' ? '#52FF30' : '#fff'} />
-                  <Text style={[styles.mapTypeText, mapType === 'hybrid' && styles.mapTypeTextActive]}>
+                  <Icon
+                    name="layers-outline"
+                    size={24}
+                    color={mapType === 'hybrid' ? '#52FF30' : '#fff'}
+                  />
+                  <Text
+                    style={[
+                      styles.mapTypeText,
+                      mapType === 'hybrid' && styles.mapTypeTextActive,
+                    ]}
+                  >
                     Hybrid
                   </Text>
-                  {mapType === 'hybrid' && <Icon name="checkmark-circle" size={20} color="#52FF30" />}
+                  {mapType === 'hybrid' && (
+                    <Icon name="checkmark-circle" size={20} color="#52FF30" />
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
-
           </View>
         </TouchableOpacity>
       </Modal>
@@ -823,7 +1284,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         <View style={styles.dragHandleContainer}>
           <View style={styles.dragHandle} />
         </View>
-        
+
         <ScrollView
           ref={scrollViewRef}
           style={styles.statsSection}
@@ -835,7 +1296,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Distance</Text>
-              <Text style={styles.statValue}>{activeRun.distance.toFixed(2)}</Text>
+              <Text style={styles.statValue}>
+                {activeRun.distance.toFixed(2)}
+              </Text>
               <Text style={styles.statUnit}>km</Text>
             </View>
             <View style={styles.statItem}>
@@ -865,12 +1328,16 @@ const RunMap = ({ navigation }: { navigation: any }) => {
             </View>
             <View style={styles.secondaryStatItem}>
               <Icon name="footsteps-outline" size={20} color="#52FF30" />
-              <Text style={styles.secondaryStatValue}>{activeRun.path.length}</Text>
+              <Text style={styles.secondaryStatValue}>
+                {activeRun.path.length}
+              </Text>
               <Text style={styles.secondaryStatLabel}>points</Text>
             </View>
             <View style={styles.secondaryStatItem}>
               <Icon name="map-outline" size={20} color="#4A90D9" />
-              <Text style={styles.secondaryStatValue}>{territories.length}</Text>
+              <Text style={styles.secondaryStatValue}>
+                {territories.length}
+              </Text>
               <Text style={styles.secondaryStatLabel}>zones</Text>
             </View>
           </View>
@@ -878,27 +1345,42 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           {/* Control Buttons */}
           <View style={styles.controlsSection}>
             {activeRun.state === 'idle' && (
-              <TouchableOpacity style={styles.startButton} onPress={handleStartRun}>
+              <TouchableOpacity
+                style={styles.startButton}
+                onPress={handleStartRun}
+              >
                 <Icon name="play" size={32} color="#000" />
                 <Text style={styles.startButtonText}>Start Run</Text>
               </TouchableOpacity>
             )}
             {activeRun.state === 'running' && (
               <View style={styles.runningControls}>
-                <TouchableOpacity style={styles.pauseButton} onPress={handlePauseRun}>
+                <TouchableOpacity
+                  style={styles.pauseButton}
+                  onPress={handlePauseRun}
+                >
                   <Icon name="pause" size={28} color="#fff" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.stopButton} onPress={handleStopRun}>
+                <TouchableOpacity
+                  style={styles.stopButton}
+                  onPress={handleStopRun}
+                >
                   <Icon name="stop" size={28} color="#fff" />
                 </TouchableOpacity>
               </View>
             )}
             {activeRun.state === 'paused' && (
               <View style={styles.runningControls}>
-                <TouchableOpacity style={styles.resumeButton} onPress={handleResumeRun}>
+                <TouchableOpacity
+                  style={styles.resumeButton}
+                  onPress={handleResumeRun}
+                >
                   <Icon name="play" size={28} color="#000" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.stopButton} onPress={handleStopRun}>
+                <TouchableOpacity
+                  style={styles.stopButton}
+                  onPress={handleStopRun}
+                >
                   <Icon name="stop" size={28} color="#fff" />
                 </TouchableOpacity>
               </View>
@@ -1215,6 +1697,73 @@ const styles = StyleSheet.create({
   },
   mapTypeTextActive: {
     color: '#52FF30',
+  },
+  territoryModalCard: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#1C1C1E',
+  },
+  territoryOwnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  territoryOwnerDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 10,
+  },
+  territoryInfoGrid: {
+    gap: 10,
+  },
+  territoryInfoItem: {
+    backgroundColor: '#2C2C2E',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  territoryInfoValue: {
+    color: '#fff',
+    marginTop: 2,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  territoryActionsRow: {
+    marginTop: 14,
+    gap: 10,
+  },
+  territoryActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  territoryActionPrimary: {
+    backgroundColor: '#52FF30',
+  },
+  territoryActionSecondary: {
+    backgroundColor: '#2C2C2E',
+    borderWidth: 1,
+    borderColor: '#3A3A3C',
+  },
+  territoryActionDisabled: {
+    opacity: 0.45,
+  },
+  territoryActionText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  territoryActionTextDark: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
 

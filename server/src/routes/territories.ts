@@ -5,6 +5,8 @@ import { addActivity, addRun, addTerritory, getAllTerritories, getUser } from '.
 import { Activity, Territory } from '../types';
 
 export const territoriesRouter = Router();
+const MIN_GRID_CELL_SIZE_METERS = 500;
+const MIN_GRID_CELL_AREA_KM2 = (MIN_GRID_CELL_SIZE_METERS * MIN_GRID_CELL_SIZE_METERS) / 1_000_000;
 
 // GET /api/territories — return all claimed territories
 territoriesRouter.get('/', (_req, res) => {
@@ -17,6 +19,13 @@ territoriesRouter.post('/', (req, res) => {
 
   if (!body.id || !body.ownerId || !Array.isArray(body.boundary)) {
     res.status(400).json({ error: 'Missing required fields: id, ownerId, boundary' });
+    return;
+  }
+
+  if ((body.area || 0) < MIN_GRID_CELL_AREA_KM2) {
+    res.status(400).json({
+      error: `Territory area is too small for grid mode. Minimum is ${MIN_GRID_CELL_SIZE_METERS}m x ${MIN_GRID_CELL_SIZE_METERS}m (${MIN_GRID_CELL_AREA_KM2}km²).`,
+    });
     return;
   }
 
