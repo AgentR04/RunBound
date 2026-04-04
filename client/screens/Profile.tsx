@@ -9,11 +9,9 @@ import {
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { fetchLeaderboard, fetchUser, UserProfile } from '../services/api';
-import { MOCK_USER } from '../types/game';
-
-const CURRENT_USER_ID = MOCK_USER.id;
 
 function StatCard({
   icon,
@@ -76,6 +74,8 @@ const Profile = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { isConnected, onlineUsers } = useSocket();
+  const { user, signOut } = useAuth();
+  const currentUserId = user?.id ?? '';
 
   const load = useCallback(async (showRefresh = false) => {
     try {
@@ -84,7 +84,7 @@ const Profile = () => {
       setError(null);
 
       const [profileData, leaderData] = await Promise.all([
-        fetchUser(CURRENT_USER_ID),
+        fetchUser(currentUserId),
         fetchLeaderboard(),
       ]);
 
@@ -97,7 +97,7 @@ const Profile = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     load();
@@ -147,11 +147,13 @@ const Profile = () => {
 
       {/* Avatar + name */}
       <View style={styles.avatarSection}>
-        <View style={[styles.avatar, { backgroundColor: profile?.color ?? MOCK_USER.color }]}>
+        <View style={[styles.avatar, { backgroundColor: profile?.color ?? '#52FF30' }]}>
           <Icon name="person" size={32} color="#000" />
         </View>
-        <Text style={styles.username}>{profile?.username ?? MOCK_USER.username}</Text>
-        <Text style={styles.userId}>ID: {CURRENT_USER_ID}</Text>
+        <Text style={styles.username}>
+          {profile?.username ?? user?.user_metadata?.username ?? 'Runner'}
+        </Text>
+        <Text style={styles.userId}>{user?.email}</Text>
       </View>
 
       {/* Stats grid */}
@@ -181,6 +183,12 @@ const Profile = () => {
         />
       </View>
 
+      {/* Sign Out */}
+      <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
+        <Icon name="log-out-outline" size={16} color="#FF3B30" />
+        <Text style={styles.signOutText}>Sign Out</Text>
+      </TouchableOpacity>
+
       {/* Leaderboard */}
       <Text style={styles.sectionTitle}>Leaderboard</Text>
       <View style={styles.leaderboard}>
@@ -189,12 +197,12 @@ const Profile = () => {
             <Text style={styles.emptyLeaderText}>No runners yet. Go claim territory!</Text>
           </View>
         ) : (
-          leaderboard.map((user, index) => (
+          leaderboard.map((u, index) => (
             <LeaderboardRow
-              key={user.id}
-              user={user}
+              key={u.id}
+              user={u}
               rank={index + 1}
-              isMe={user.id === CURRENT_USER_ID}
+              isMe={u.id === currentUserId}
             />
           ))
         )}
@@ -384,5 +392,23 @@ const styles = StyleSheet.create({
   emptyLeaderText: {
     color: '#555',
     fontSize: 14,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 59, 48, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.2)',
+  },
+  signOutText: {
+    color: '#FF3B30',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

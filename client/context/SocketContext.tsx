@@ -6,7 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { Socket } from 'socket.io-client';
-import { MOCK_USER } from '../types/game';
+import { useAuth } from './AuthContext';
 import { getSocket, joinAsUser } from '../services/socket';
 
 interface SocketContextValue {
@@ -25,6 +25,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(0);
+  const { user } = useAuth();
 
   useEffect(() => {
     const s = getSocket();
@@ -32,22 +33,21 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     const onConnect = () => {
       setIsConnected(true);
-      // Announce who we are to the server
-      joinAsUser(MOCK_USER.id);
+      if (user?.id) {
+        joinAsUser(user.id);
+      }
     };
 
     const onDisconnect = () => setIsConnected(false);
-
     const onUsersOnline = (count: number) => setOnlineUsers(count);
 
     s.on('connect', onConnect);
     s.on('disconnect', onDisconnect);
     s.on('users:online', onUsersOnline);
 
-    // If already connected when mounting
-    if (s.connected) {
+    if (s.connected && user?.id) {
       setIsConnected(true);
-      joinAsUser(MOCK_USER.id);
+      joinAsUser(user.id);
     }
 
     return () => {
@@ -55,7 +55,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       s.off('disconnect', onDisconnect);
       s.off('users:online', onUsersOnline);
     };
-  }, []);
+  }, [user?.id]);
 
   return (
     <SocketContext.Provider

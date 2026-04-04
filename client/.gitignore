@@ -82,6 +82,9 @@ yarn-error.log
 .env.*
 !.env.example
 
+# local config (contains secrets)
+lib/config.ts
+
 # misc build output
 dist/
 tmp/

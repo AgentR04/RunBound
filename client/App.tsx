@@ -2,13 +2,13 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {
+  ActivityIndicator,
   Image,
   StatusBar,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
-  ActivityIndicator,
-  Text,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -24,7 +24,7 @@ import RegisterScreen from './screens/auth/RegisterScreen';
 
 function AuthStack() {
   const Stack = createNativeStackNavigator();
-  
+
   return (
     <Stack.Navigator
       screenOptions={{
@@ -52,7 +52,7 @@ function LoadingScreen() {
 
 function RootStack() {
   const Stack = createNativeStackNavigator();
-  
+
   function TabsScreen() {
     const Tab = createBottomTabNavigator();
 
@@ -63,11 +63,7 @@ function RootStack() {
             <View style={styles.logoCircle}>
               <Image
                 source={require('./assets/logo/RunBound White.png')}
-                style={{
-                  width: 40,
-                  height: 40,
-                  resizeMode: 'center',
-                }}
+                style={styles.headerLogo}
               />
             </View>
             <TouchableOpacity style={styles.addButton}>
@@ -150,15 +146,15 @@ function RootStack() {
 
   return (
     <>
-      <StatusBar barStyle="light-content" showHideTransition={'slide'} />
+      <StatusBar barStyle="light-content" showHideTransition="slide" />
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
         }}
       >
         <Stack.Screen name="MainTabs" component={TabsScreen} />
-        <Stack.Screen 
-          name="ActiveRun" 
+        <Stack.Screen
+          name="ActiveRun"
           component={ActiveRun}
           options={{
             presentation: 'fullScreenModal',
@@ -172,11 +168,11 @@ function RootStack() {
 
 function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
-  
+
   if (isLoading) {
     return <LoadingScreen />;
   }
-  
+
   return isAuthenticated ? <RootStack /> : <AuthStack />;
 }
 
@@ -196,8 +192,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#252525',
     paddingTop: 60,
-    // paddingBottom: 20,
-    // paddingHorizontal: 20,
     height: 100,
     flexDirection: 'row',
     justifyContent: 'center',
@@ -216,6 +210,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 4,
     borderColor: '#252525',
+  },
+  headerLogo: {
+    width: 40,
+    height: 40,
+    resizeMode: 'center',
   },
   addButton: {
     position: 'absolute',
