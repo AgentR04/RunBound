@@ -3,6 +3,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  Image,
   InteractionManager,
   Modal,
   PanResponder,
@@ -46,6 +47,7 @@ import { saveRun, saveTerritory, updateUserStats } from '../utils/storage';
 import {
   calculatePolygonArea,
   getPolygonCenter,
+  isPointInPolygon,
   isNearStartPoint,
   isValidTerritory,
   simplifyPolygon,
@@ -57,6 +59,41 @@ const {
 } = require('../src/engines/DropEngine');
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const DECORATION_DRAWER_WIDTH = 138;
+type DecorationDrawerSection = 'root' | 'asgard' | 'new-york';
+
+const DECORATION_COLLECTIONS = {
+  asgard: [
+    {
+      id: 'loki-weapon',
+      label: 'Loki Weapon',
+      image: require('../assets/img/loki_weapon-removebg-preview.png'),
+    },
+    {
+      id: 'storm-breaker',
+      label: 'Storm Breaker',
+      image: require('../assets/img/stormbreaker.jpeg'),
+    },
+    {
+      id: 'thors-hammer',
+      label: "Thor's Hammer",
+      image: require('../assets/img/thor_hammer.jpeg'),
+    },
+  ],
+  'new-york': [
+    {
+      id: 'stark-tower',
+      label: 'Stark Tower',
+      image: require('../assets/img/stark_tower.png'),
+    },
+    {
+      id: 'captain-america-shield',
+      label: 'Captain America Shield',
+      image: require('../assets/img/cap_ssheil-removebg-preview.png'),
+    },
+  ],
+} as const;
+
 const MINIMIZED_HEIGHT = 82;
 const COLLAPSED_HEIGHT = 270;
 const HALF_HEIGHT = SCREEN_HEIGHT * 0.52;
@@ -112,6 +149,22 @@ type CaptureCelebration = {
 };
 
 type TerritoryStatus = 'owned' | 'enemy' | 'contested';
+type TerritoryDecoration = {
+  id: string;
+  territoryId: string;
+  label: string;
+  image: any;
+  coordinate: {
+    latitude: number;
+    longitude: number;
+  };
+};
+
+type DecorationItem = {
+  id: string;
+  label: string;
+  image: any;
+};
 
 type TerritoryDisplay = {
   territory: Territory;
@@ -171,6 +224,82 @@ function getPlayerRankTitle(ownedTerritories: number, totalDistanceKm: number) {
 
 function estimateSteps(distanceKm: number) {
   return Math.max(0, Math.round(distanceKm * 1312));
+}
+
+function metersToLat(meters: number) {
+  return meters / 111_320;
+}
+
+function metersToLng(meters: number, atLatitude: number) {
+  const cosLat = Math.cos((atLatitude * Math.PI) / 180);
+  const safeCos = Math.max(0.1, Math.abs(cosLat));
+  return meters / (111_320 * safeCos);
+}
+
+function distanceBetweenPointsMeters(
+  left: { latitude: number; longitude: number },
+  right: { latitude: number; longitude: number },
+) {
+  const latitudeDeltaMeters = (left.latitude - right.latitude) * 111_320;
+  const averageLatitude = (left.latitude + right.latitude) / 2;
+  const longitudeDeltaMeters =
+    (left.longitude - right.longitude) *
+    111_320 *
+    Math.max(0.1, Math.abs(Math.cos((averageLatitude * Math.PI) / 180)));
+
+  return Math.sqrt(
+    latitudeDeltaMeters * latitudeDeltaMeters +
+      longitudeDeltaMeters * longitudeDeltaMeters,
+  );
+}
+
+function getDecorationCoordinate(
+  boundary: LocationPoint[],
+  existingCoordinates: Array<{ latitude: number; longitude: number }>,
+) {
+  const minLatitude = Math.min(...boundary.map(point => point.latitude));
+  const maxLatitude = Math.max(...boundary.map(point => point.latitude));
+  const minLongitude = Math.min(...boundary.map(point => point.longitude));
+  const maxLongitude = Math.max(...boundary.map(point => point.longitude));
+  const minimumSpacingMeters = 52;
+
+  let bestCandidate = getPolygonCenter(boundary);
+  let bestDistance = -1;
+
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const candidate = {
+      latitude: minLatitude + Math.random() * (maxLatitude - minLatitude),
+      longitude: minLongitude + Math.random() * (maxLongitude - minLongitude),
+      timestamp: Date.now(),
+    };
+
+    if (!isPointInPolygon(candidate, boundary)) {
+      continue;
+    }
+
+    const nearestDistance = existingCoordinates.length
+      ? Math.min(
+          ...existingCoordinates.map(existing =>
+            distanceBetweenPointsMeters(candidate, existing),
+          ),
+        )
+      : Number.POSITIVE_INFINITY;
+
+    if (nearestDistance >= minimumSpacingMeters) {
+      return candidate;
+    }
+
+    if (nearestDistance > bestDistance) {
+      bestCandidate = candidate;
+      bestDistance = nearestDistance;
+    }
+  }
+
+  if (!isPointInPolygon(bestCandidate, boundary)) {
+    return getPolygonCenter(boundary);
+  }
+
+  return bestCandidate;
 }
 
 function getTerritoryName(territory: Territory) {
@@ -282,6 +411,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   const [selectedTerritoryId, setSelectedTerritoryId] = useState<string | null>(
     null,
   );
+  const [territoryDecorations, setTerritoryDecorations] = useState<
+    TerritoryDecoration[]
+  >([]);
+  const [isDecorationDrawerOpen, setIsDecorationDrawerOpen] = useState(false);
+  const [decorationDrawerSection, setDecorationDrawerSection] =
+    useState<DecorationDrawerSection>('root');
   const [captureCelebration, setCaptureCelebration] =
     useState<CaptureCelebration | null>(null);
   const [overlays, setOverlays] = useState({
@@ -303,6 +438,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   const mapRef = useRef<MapView>(null);
   const [isSheetMinimized, setIsSheetMinimized] = useState(true);
   const sheetHeight = useRef(new Animated.Value(MINIMIZED_HEIGHT)).current;
+  const decorationDrawerTranslateX = useRef(
+    new Animated.Value(-(DECORATION_DRAWER_WIDTH + 20)),
+  ).current;
   const lastSheetHeight = useRef(MINIMIZED_HEIGHT);
   const isAnimating = useRef(false);
   const conquestPulse = useRef(new Animated.Value(0)).current;
@@ -330,6 +468,8 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   const selectedTerritory =
     territoryDisplays.find(display => display.territory.id === selectedTerritoryId) ??
     null;
+  const isSelectedTerritoryOwnedByCurrentUser =
+    selectedTerritory?.territory.ownerId === currentUserId;
   const ownedTerritories = territories.filter(
     territory => territory.ownerId === currentUserId,
   ).length;
@@ -641,6 +781,26 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   }, [useMockTerritories, userLocation]);
 
   useEffect(() => {
+    if (!isSelectedTerritoryOwnedByCurrentUser && isDecorationDrawerOpen) {
+      setIsDecorationDrawerOpen(false);
+      setDecorationDrawerSection('root');
+    }
+  }, [
+    decorationDrawerSection,
+    isDecorationDrawerOpen,
+    isSelectedTerritoryOwnedByCurrentUser,
+  ]);
+
+  useEffect(() => {
+    Animated.spring(decorationDrawerTranslateX, {
+      toValue: isDecorationDrawerOpen ? 0 : -(DECORATION_DRAWER_WIDTH + 20),
+      useNativeDriver: true,
+      tension: 56,
+      friction: 9,
+    }).start();
+  }, [decorationDrawerTranslateX, isDecorationDrawerOpen]);
+
+  useEffect(() => {
     if (!socket) {
       return;
     }
@@ -788,6 +948,70 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
   const handleOpenPowerups = () => {
     navigation.navigate('Powerups');
+  };
+
+  const handleAddDecoration = () => {
+    if (!isSelectedTerritoryOwnedByCurrentUser) {
+      return;
+    }
+
+    setIsDecorationDrawerOpen(previous => {
+      if (previous) {
+        setDecorationDrawerSection('root');
+      }
+      return !previous;
+    });
+  };
+
+  const handleCloseDecorationDrawer = () => {
+    setIsDecorationDrawerOpen(false);
+    setDecorationDrawerSection('root');
+  };
+
+  const handleDecorationDrawerBack = () => {
+    if (decorationDrawerSection === 'root') {
+      handleCloseDecorationDrawer();
+      return;
+    }
+
+    setDecorationDrawerSection('root');
+  };
+
+  const handleOpenDecorationSection = (section: Exclude<DecorationDrawerSection, 'root'>) => {
+    setDecorationDrawerSection(section);
+  };
+
+  const handleSelectDecorationItem = (item: DecorationItem) => {
+    if (!selectedTerritory || !isSelectedTerritoryOwnedByCurrentUser) {
+      return;
+    }
+
+    setTerritoryDecorations(previous => {
+      const existingForTerritory = previous.filter(
+        decoration => decoration.territoryId === selectedTerritory.territory.id,
+      );
+      const coordinate = getDecorationCoordinate(
+        selectedTerritory.territory.boundary,
+        existingForTerritory.map(decoration => decoration.coordinate),
+      );
+
+      return [
+        ...previous,
+        {
+          id: `${selectedTerritory.territory.id}-${item.id}-${Date.now()}`,
+          territoryId: selectedTerritory.territory.id,
+          label: item.label,
+          image: item.image,
+          coordinate: {
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+          },
+        },
+      ];
+    });
+
+    setIsDecorationDrawerOpen(false);
+    setDecorationDrawerSection('root');
   };
 
   const handleSelectMapType = (type: 'standard' | 'satellite' | 'hybrid') => {
@@ -1179,6 +1403,21 @@ const RunMap = ({ navigation }: { navigation: any }) => {
             />
           )}
 
+          {territoryDecorations.map(decoration => (
+            <Marker
+              key={decoration.id}
+              coordinate={decoration.coordinate}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.territoryDecorationMarker}>
+                <Image
+                  source={decoration.image}
+                  style={styles.territoryDecorationImage}
+                />
+              </View>
+            </Marker>
+          ))}
+
           {activeRun.state !== 'idle' && previewBoundary.length > 2 && (
             <Polygon
               coordinates={previewBoundary}
@@ -1241,6 +1480,74 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           <View style={[styles.scanline, styles.scanlineMid]} />
           <View style={[styles.scanline, styles.scanlineBottom]} />
         </View>
+
+        <Animated.View
+          style={[
+            styles.decorationDrawer,
+            {
+              transform: [{ translateX: decorationDrawerTranslateX }],
+            },
+          ]}
+          pointerEvents={isDecorationDrawerOpen ? 'auto' : 'none'}
+        >
+          <TouchableOpacity
+            style={styles.decorationDrawerClose}
+            onPress={handleDecorationDrawerBack}
+          >
+            <Icon
+              name={
+                decorationDrawerSection === 'root'
+                  ? 'close-outline'
+                  : 'chevron-back-outline'
+              }
+              size={18}
+              color="#F5C15D"
+            />
+          </TouchableOpacity>
+
+          <View style={styles.decorationDrawerContent}>
+            {decorationDrawerSection === 'root' ? (
+              <>
+                <TouchableOpacity
+                  style={styles.decorationOption}
+                  onPress={() => handleOpenDecorationSection('asgard')}
+                >
+                  <View style={styles.decorationBadge}>
+                    <Icon name="planet-outline" size={28} color="#67E6FF" />
+                  </View>
+                  <Text style={styles.decorationLabel}>Asgard</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.decorationOption}
+                  onPress={() => handleOpenDecorationSection('new-york')}
+                >
+                  <View
+                    style={[styles.decorationBadge, styles.decorationBadgeSecondary]}
+                  >
+                    <Icon name="business-outline" size={22} color="#F5C15D" />
+                  </View>
+                  <Text style={styles.decorationLabel}>New York</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {DECORATION_COLLECTIONS[decorationDrawerSection].map(item => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.decorationItem}
+                    onPress={() => handleSelectDecorationItem(item)}
+                  >
+                    <View style={styles.decorationBadge}>
+                      <Image source={item.image} style={styles.decorationItemImage} />
+                    </View>
+                    <Text style={styles.decorationLabel}>{item.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+          </View>
+        </Animated.View>
 
         <TacticalHud
           playerName={currentUserName}
@@ -1596,6 +1903,17 @@ const RunMap = ({ navigation }: { navigation: any }) => {
               onChallengeTerritory={handleChallengeTerritory}
               onViewOwner={handleViewOwnerProfile}
             />
+
+            {isSelectedTerritoryOwnedByCurrentUser ? (
+              <TouchableOpacity
+                style={[styles.powerupsButton, styles.decorationButton]}
+                onPress={handleAddDecoration}
+              >
+                <Icon name="color-wand-outline" size={20} color="#FFF1D8" />
+                <Text style={styles.powerupsButtonText}>Add decoration</Text>
+                <Icon name="chevron-forward" size={18} color="#FFF1D8" />
+              </TouchableOpacity>
+            ) : null}
 
             <TouchableOpacity
               style={styles.powerupsButton}
@@ -1969,6 +2287,91 @@ const styles = StyleSheet.create({
   mapTypeTextActive: {
     color: '#8C651B',
   },
+  decorationDrawer: {
+    position: 'absolute',
+    top: 126,
+    left: 0,
+    width: DECORATION_DRAWER_WIDTH,
+    borderTopRightRadius: 22,
+    borderBottomRightRadius: 22,
+    backgroundColor: 'rgba(7, 16, 31, 0.96)',
+    borderWidth: 1,
+    borderLeftWidth: 0,
+    borderColor: 'rgba(103, 230, 255, 0.26)',
+    shadowColor: '#030A13',
+    shadowOffset: { width: 6, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 14,
+  },
+  decorationDrawerClose: {
+    alignSelf: 'flex-end',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginTop: 10,
+    marginRight: 10,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 193, 93, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  decorationDrawerContent: {
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 18,
+  },
+  decorationOption: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  decorationItem: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  decorationBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  decorationBadgeSecondary: {
+    marginTop: 2,
+  },
+  decorationItemImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    resizeMode: 'contain',
+  },
+  territoryDecorationMarker: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: 'rgba(7, 16, 31, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  territoryDecorationImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    resizeMode: 'contain',
+  },
+  decorationLabel: {
+    marginTop: 8,
+    marginBottom: 14,
+    color: '#FFF1D8',
+    fontSize: 18,
+    fontFamily: TITLE_FONT,
+    letterSpacing: 0.6,
+  },
   bottomSheet: {
     position: 'absolute',
     left: 0,
@@ -2034,6 +2437,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
+  },
+  decorationButton: {
+    marginBottom: 12,
+    backgroundColor: '#183456',
+    borderColor: '#57B8FF',
   },
   powerupsButtonText: {
     color: '#FFF1D8',
