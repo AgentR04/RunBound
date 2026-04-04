@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { SocketProvider } from './context/SocketContext';
 import ActiveRun from './screens/ActiveRun';
 import Feed from './screens/Feed';
 import Home from './screens/Home';
@@ -138,9 +139,11 @@ function RootStack() {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <RootStack />
-    </NavigationContainer>
+    <SocketProvider>
+      <NavigationContainer>
+        <RootStack />
+      </NavigationContainer>
+    </SocketProvider>
   );
 }
 

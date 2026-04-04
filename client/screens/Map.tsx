@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import MapView, { Polygon, Polyline, Region, Circle } from 'react-native-maps';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useSocket } from '../context/SocketContext';
+import { claimTerritory as apiClaimTerritory, fetchTerritories } from '../services/api';
 import { ActiveRun, Run, Territory } from '../types/game';
 import {
   calculateCalories,
@@ -25,7 +27,6 @@ import {
   LocationPoint,
 } from '../utils/gpsTracking';
 import {
-  getTerritories,
   saveRun,
   saveTerritory,
   updateUserStats,
@@ -38,6 +39,8 @@ const HALF_HEIGHT = SCREEN_HEIGHT * 0.5;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.85;
 
 const RunMap = ({ navigation }: { navigation: any }) => {
+  const { socket } = useSocket();
+
   // === ALL useState HOOKS ===
   const [activeRun, setActiveRun] = useState<ActiveRun>({
     state: 'idle',
@@ -218,20 +221,39 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     };
   }, []);
 
-  // Load territories on mount
+  // Load territories from server on mount, fall back to local storage
   useEffect(() => {
     const loadData = async () => {
       try {
-        const loaded = await getTerritories();
+        const loaded = await fetchTerritories();
         if (isMounted.current) {
-          setTerritories(loaded);
+          setTerritories(loaded as Territory[]);
         }
-      } catch (error) {
-        console.error('Error loading territories:', error);
+      } catch {
+        // Server unavailable — nothing to show yet
       }
     };
     loadData();
   }, []);
+
+  // Real-time: merge incoming territories from other players
+  useEffect(() => {
+    if (!socket) return;
+
+    const onTerritoryNew = (territory: Territory) => {
+      if (!isMounted.current) return;
+      setTerritories(prev => {
+        // Ignore duplicates (our own claim already appended locally)
+        if (prev.some(t => t.id === territory.id)) return prev;
+        return [...prev, territory];
+      });
+    };
+
+    socket.on('territory:new', onTerritoryNew);
+    return () => {
+      socket.off('territory:new', onTerritoryNew);
+    };
+  }, [socket]);
 
   // Request permission on mount (location updates come from MapView callback)
   useEffect(() => {
@@ -471,6 +493,19 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         saveTerritory(newTerritory),
         saveRun(completedRun),
         updateUserStats(activeRun.distance, validation.area),
+        // Persist to server + broadcast to all connected clients
+        apiClaimTerritory({
+          territory: newTerritory,
+          run: {
+            id: completedRun.id,
+            distance: completedRun.distance,
+            duration: completedRun.duration,
+            averagePace: completedRun.averagePace,
+            averageSpeed: completedRun.averageSpeed,
+            calories: completedRun.calories,
+            path: activeRun.path,
+          },
+        }).catch(err => console.warn('[api] territory claim failed:', err.message)),
       ]);
 
       if (isMounted.current) {
