@@ -137,6 +137,8 @@ function RootStack() {
           name="Feed"
           component={Feed}
           options={{
+            title: 'Community',
+            tabBarLabel: 'Community',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="compass-outline" color={color} size={size} />
             ),

@@ -13,17 +13,46 @@ export interface TerritoryIntel {
   strength: number;
 }
 
+export interface MarathonLeaderboardIntel {
+  rank: number;
+  userId: string;
+  username: string;
+  baseCompletionScore: number;
+  speedBonus: number;
+  timeBonus: number;
+  weatherBonus: number;
+  totalScore: number;
+  reward: string;
+}
+
+export interface MarathonIntel {
+  id: string;
+  name: string;
+  areaM2: number;
+  distanceKm: number;
+  daysRemaining: number;
+  hoursRemaining: number;
+  durationDays: number;
+  baseCompletionScore: number;
+  weatherLabel: string;
+  weatherBonusNote: string;
+  leaderboard: MarathonLeaderboardIntel[];
+}
+
 interface TerritoryIntelSheetProps {
   selectedTerritory: TerritoryIntel | null;
+  selectedMarathon: MarathonIntel | null;
   territoryCount: number;
   enemyCount: number;
   contestedCount: number;
+  neutralCount: number;
   distanceKm: number;
   durationLabel: string;
   stepCount: number;
   onStartRun: () => void;
   onChallengeTerritory: () => void;
   onViewOwner: () => void;
+  onJoinMarathon: () => void;
 }
 
 function formatDecay(hoursRemaining: number) {
@@ -55,17 +84,40 @@ function getStatusAccent(status: TerritoryIntel['status']) {
   }
 }
 
+function getRewardLabel(rank: number) {
+  if (rank === 1) {
+    return '2 powerups + 500 coins';
+  }
+
+  if (rank === 2) {
+    return '1 powerup + 200 coins';
+  }
+
+  if (rank === 3) {
+    return '100 coins';
+  }
+
+  if (rank <= 10) {
+    return '50 coins';
+  }
+
+  return 'Finish reward pending';
+}
+
 export default function TerritoryIntelSheet({
   selectedTerritory,
+  selectedMarathon,
   territoryCount,
   enemyCount,
   contestedCount,
+  neutralCount,
   distanceKm,
   durationLabel,
   stepCount,
   onStartRun,
   onChallengeTerritory,
   onViewOwner,
+  onJoinMarathon,
 }: TerritoryIntelSheetProps) {
   return (
     <View style={styles.content}>
@@ -84,7 +136,87 @@ export default function TerritoryIntelSheet({
         </View>
       </View>
 
-      {selectedTerritory ? (
+      {selectedMarathon ? (
+        <View style={styles.intelCard}>
+          <View style={styles.cardHeader}>
+            <View>
+              <Text style={styles.sectionEyebrow}>Marathon Window</Text>
+              <Text style={styles.territoryName}>{selectedMarathon.name}</Text>
+            </View>
+            <View style={[styles.statusBadge, styles.neutralBadge]}>
+              <Icon name="flag-outline" size={14} color="#B9D8F4" />
+              <Text style={[styles.statusText, styles.neutralBadgeText]}>neutral</Text>
+            </View>
+          </View>
+
+          <View style={styles.rewardGrid}>
+            <View style={styles.rewardCard}>
+              <Text style={styles.rewardValue}>{selectedMarathon.distanceKm.toFixed(1)}</Text>
+              <Text style={styles.rewardLabel}>KM track</Text>
+            </View>
+            <View style={styles.rewardCard}>
+              <Text style={styles.rewardValue}>
+                {selectedMarathon.daysRemaining}d {selectedMarathon.hoursRemaining}h
+              </Text>
+              <Text style={styles.rewardLabel}>Remaining</Text>
+            </View>
+            <View style={styles.rewardCard}>
+              <Text style={styles.rewardValue}>{selectedMarathon.baseCompletionScore}</Text>
+              <Text style={styles.rewardLabel}>Base score</Text>
+            </View>
+          </View>
+
+          <View style={styles.detailRow}>
+            <View style={styles.detailPill}>
+              <Icon name="analytics-outline" size={14} color="#9BD8FF" />
+              <Text style={styles.detailText}>
+                Score = base completion + speed bonus + time bonus + weather bonus
+              </Text>
+            </View>
+            <View style={[styles.detailPill, styles.weatherPill]}>
+              <Icon name="rainy-outline" size={14} color="#F5C15D" />
+              <Text style={styles.detailText}>
+                Weather: {selectedMarathon.weatherLabel}. {selectedMarathon.weatherBonusNote}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.leaderboardSection}>
+            <Text style={styles.leaderboardTitle}>Live leaderboard</Text>
+            {selectedMarathon.leaderboard.map(entry => (
+              <View key={entry.userId} style={styles.leaderboardRow}>
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankBadgeText}>#{entry.rank}</Text>
+                </View>
+                <View style={styles.leaderboardBody}>
+                  <View style={styles.leaderboardHeader}>
+                    <Text style={styles.leaderboardName}>{entry.username}</Text>
+                    <Text style={styles.leaderboardScore}>{entry.totalScore}</Text>
+                  </View>
+                  <Text style={styles.leaderboardBreakdown}>
+                    {entry.baseCompletionScore} base + {entry.speedBonus} speed +{' '}
+                    {entry.timeBonus} time + {entry.weatherBonus} weather
+                  </Text>
+                  <Text style={styles.leaderboardReward}>{entry.reward}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.rewardsCard}>
+            <Text style={styles.rewardsTitle}>Reward ladder</Text>
+            <Text style={styles.rewardsLine}>Winner: 2 powerups + 500 coins</Text>
+            <Text style={styles.rewardsLine}>1st runner up: 1 powerup + 200 coins</Text>
+            <Text style={styles.rewardsLine}>2nd runner up: 100 coins</Text>
+            <Text style={styles.rewardsLine}>Ranks 4-10: 50 coins each</Text>
+          </View>
+
+          <TouchableOpacity style={styles.primaryButton} onPress={onJoinMarathon}>
+            <Icon name="trophy-outline" size={18} color="#FFF3E0" />
+            <Text style={styles.primaryButtonText}>Join 7-Day Marathon</Text>
+          </TouchableOpacity>
+        </View>
+      ) : selectedTerritory ? (
         <View style={styles.intelCard}>
           <View style={styles.cardHeader}>
             <View>
@@ -200,6 +332,18 @@ export default function TerritoryIntelSheet({
             </View>
           </View>
 
+          <View style={[styles.rewardGrid, styles.summaryGrid]}>
+            <View style={styles.rewardCard}>
+              <Text style={styles.rewardValue}>{neutralCount}</Text>
+              <Text style={styles.rewardLabel}>Marathons</Text>
+            </View>
+            <View style={styles.rewardCardWide}>
+              <Text style={styles.summaryText}>
+                Neutral sectors now run simultaneous 7-day marathons with live leaderboards and reward tiers.
+              </Text>
+            </View>
+          </View>
+
           <TouchableOpacity
             style={[styles.primaryButton, styles.summaryPrimaryButton]}
             onPress={onStartRun}
@@ -279,6 +423,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
   },
+  neutralBadge: {
+    backgroundColor: 'rgba(125, 156, 191, 0.18)',
+  },
+  neutralBadgeText: {
+    color: '#B9D8F4',
+  },
   statusText: {
     fontSize: 12,
     fontWeight: '800',
@@ -325,10 +475,22 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 16,
   },
+  summaryGrid: {
+    marginTop: 10,
+  },
   rewardCard: {
     flex: 1,
     alignItems: 'center',
     borderRadius: 18,
+    paddingVertical: 13,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.12)',
+  },
+  rewardCardWide: {
+    flex: 2,
+    borderRadius: 18,
+    paddingHorizontal: 14,
     paddingVertical: 13,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
@@ -349,6 +511,7 @@ const styles = StyleSheet.create({
   },
   detailRow: {
     marginTop: 16,
+    gap: 10,
   },
   detailPill: {
     flexDirection: 'row',
@@ -360,6 +523,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245, 193, 93, 0.12)',
     borderWidth: 1,
     borderColor: 'rgba(245, 193, 93, 0.22)',
+  },
+  weatherPill: {
+    backgroundColor: 'rgba(103, 230, 255, 0.08)',
+    borderColor: 'rgba(103, 230, 255, 0.16)',
   },
   detailText: {
     flex: 1,
@@ -400,6 +567,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    marginTop: 16,
   },
   primaryButtonDisabled: {
     flex: 1,
@@ -427,9 +595,91 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   summaryText: {
-    marginTop: 10,
     color: '#7A90A9',
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: UI_FONT,
+  },
+  leaderboardSection: {
+    marginTop: 18,
+  },
+  leaderboardTitle: {
+    color: '#F4F8FF',
+    fontSize: 21,
+    fontFamily: TITLE_FONT,
+  },
+  leaderboardRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 12,
+    borderRadius: 18,
+    padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.1)',
+  },
+  rankBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(245, 193, 93, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankBadgeText: {
+    color: '#FFF1D8',
+    fontSize: 13,
+    fontFamily: STAT_FONT,
+  },
+  leaderboardBody: {
+    flex: 1,
+  },
+  leaderboardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  leaderboardName: {
+    color: '#F4F8FF',
     fontSize: 14,
-    lineHeight: 21,
+    fontFamily: UI_FONT,
+  },
+  leaderboardScore: {
+    color: '#67E6FF',
+    fontSize: 14,
+    fontFamily: STAT_FONT,
+  },
+  leaderboardBreakdown: {
+    marginTop: 4,
+    color: '#AFC7DE',
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: UI_FONT,
+  },
+  leaderboardReward: {
+    marginTop: 5,
+    color: '#F5C15D',
+    fontSize: 12,
+    fontFamily: UI_FONT,
+  },
+  rewardsCard: {
+    marginTop: 16,
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: 'rgba(103, 230, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.16)',
+  },
+  rewardsTitle: {
+    color: '#F4F8FF',
+    fontSize: 18,
+    fontFamily: TITLE_FONT,
+  },
+  rewardsLine: {
+    marginTop: 6,
+    color: '#D9E8F7',
+    fontSize: 13,
+    fontFamily: UI_FONT,
   },
 });

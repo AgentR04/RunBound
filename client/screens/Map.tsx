@@ -26,7 +26,9 @@ import MapView, {
 } from 'react-native-maps';
 import Icon from 'react-native-vector-icons/Ionicons';
 import TacticalHud from '../components/map/TacticalHud';
-import TerritoryIntelSheet from '../components/map/TerritoryIntelSheet';
+import TerritoryIntelSheet, {
+  MarathonIntel,
+} from '../components/map/TerritoryIntelSheet';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { STAT_FONT, TITLE_FONT, UI_FONT } from '../theme/fonts';
@@ -34,7 +36,12 @@ import {
   claimTerritory as apiClaimTerritory,
   fetchTerritories,
 } from '../services/api';
-import { ActiveRun, Run, Territory } from '../types/game';
+import {
+  ActiveRun,
+  MarathonTerritory,
+  Run,
+  Territory,
+} from '../types/game';
 import {
   calculateCalories,
   calculatePace,
@@ -42,7 +49,10 @@ import {
   calculateSpeed,
   LocationPoint,
 } from '../utils/gpsTracking';
-import { getMockTerritories } from '../utils/mockTerritories';
+import {
+  getMockMarathonTerritories,
+  getMockTerritories,
+} from '../utils/mockTerritories';
 import { saveRun, saveTerritory, updateUserStats } from '../utils/storage';
 import {
   calculatePolygonArea,
@@ -148,7 +158,7 @@ type CaptureCelebration = {
   subtitle: string;
 };
 
-type TerritoryStatus = 'owned' | 'enemy' | 'contested';
+type TerritoryStatus = 'owned' | 'enemy' | 'contested' | 'neutral';
 type TerritoryDecoration = {
   id: string;
   territoryId: string;
@@ -174,6 +184,19 @@ type TerritoryDisplay = {
   daysHeld: number;
   decayHoursRemaining: number;
 };
+
+type MarathonTerritoryDisplay = {
+  territory: MarathonTerritory;
+  center: LocationPoint;
+  status: TerritoryStatus;
+  hoursRemaining: number;
+  daysRemaining: number;
+};
+
+type SelectedMapZone =
+  | { kind: 'claimed'; id: string }
+  | { kind: 'marathon'; id: string }
+  | null;
 
 const TERRITORY_NAME_PREFIXES = [
   'Bandra',
@@ -323,6 +346,10 @@ function getTerritoryStatus(
   return territory.ownerId === currentUserId ? 'owned' : 'enemy';
 }
 
+function getMarathonStatus(): TerritoryStatus {
+  return 'neutral';
+}
+
 function getTerritoryPalette(
   status: TerritoryStatus,
   isSelected: boolean,
@@ -349,6 +376,16 @@ function getTerritoryPalette(
       strokeWidth: 3.4,
       marker: '#FFD34D',
       markerBg: '#52410A',
+    };
+  }
+
+  if (status === 'neutral') {
+    return {
+      fill: 'rgba(125, 156, 191, 0.18)',
+      stroke: selectedStroke || '#9BC9F6',
+      strokeWidth: 2.8,
+      marker: '#B9D8F4',
+      markerBg: '#203246',
     };
   }
 
@@ -397,6 +434,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     }),
   );
   const [territories, setTerritories] = useState<Territory[]>([]);
+  const [marathonTerritories, setMarathonTerritories] = useState<
+    MarathonTerritory[]
+  >([]);
   const [userLocation, setUserLocation] = useState<LocationPoint | null>(null);
   const [hasLocationPermission, setHasLocationPermission] = useState(false);
   const [timer, setTimer] = useState(0);
@@ -408,9 +448,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   );
   const [showMapTypeOverlay, setShowMapTypeOverlay] = useState(false);
   const [useMockTerritories, setUseMockTerritories] = useState(__DEV__);
-  const [selectedTerritoryId, setSelectedTerritoryId] = useState<string | null>(
-    null,
-  );
+  const [selectedZone, setSelectedZone] = useState<SelectedMapZone>(null);
   const [territoryDecorations, setTerritoryDecorations] = useState<
     TerritoryDecoration[]
   >([]);
@@ -462,12 +500,39 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       decayHoursRemaining: Math.max(0, DECAY_WINDOW_HOURS - Math.floor(heldHours)),
     };
   });
+  const marathonDisplays: MarathonTerritoryDisplay[] = marathonTerritories.map(
+    territory => {
+      const center = getPolygonCenter(territory.boundary);
+      const remainingHours = Math.max(
+        0,
+        Math.floor((new Date(territory.endsAt).getTime() - Date.now()) / 3_600_000),
+      );
+
+      return {
+        territory,
+        center,
+        status: getMarathonStatus(),
+        hoursRemaining: remainingHours % 24,
+        daysRemaining: Math.floor(remainingHours / 24),
+      };
+    },
+  );
   const visibleTerritories = territoryDisplays.filter(display =>
     isPointInsideRegion(display.center, mapRegion),
   );
+  const visibleMarathonTerritories = marathonDisplays.filter(display =>
+    isPointInsideRegion(display.center, mapRegion),
+  );
   const selectedTerritory =
-    territoryDisplays.find(display => display.territory.id === selectedTerritoryId) ??
-    null;
+    selectedZone?.kind === 'claimed'
+      ? territoryDisplays.find(display => display.territory.id === selectedZone.id) ??
+        null
+      : null;
+  const selectedMarathon =
+    selectedZone?.kind === 'marathon'
+      ? marathonDisplays.find(display => display.territory.id === selectedZone.id) ??
+        null
+      : null;
   const isSelectedTerritoryOwnedByCurrentUser =
     selectedTerritory?.territory.ownerId === currentUserId;
   const ownedTerritories = territories.filter(
@@ -479,6 +544,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   const contestedCount = visibleTerritories.filter(
     territory => territory.status === 'contested',
   ).length;
+  const visibleNeutralCount = visibleMarathonTerritories.length;
   const rankTitle = getPlayerRankTitle(ownedTerritories, activeRun.distance);
   const sortedTerritories = [...territoryDisplays].sort((left, right) => {
     const leftOwned = left.territory.ownerId === currentUserId ? 1 : 0;
@@ -488,15 +554,26 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       return leftOwned - rightOwned;
     }
 
-    if (left.territory.id === selectedTerritoryId) {
+    if (selectedZone?.kind === 'claimed' && left.territory.id === selectedZone.id) {
       return 1;
     }
 
-    if (right.territory.id === selectedTerritoryId) {
+    if (selectedZone?.kind === 'claimed' && right.territory.id === selectedZone.id) {
       return -1;
     }
 
     return left.daysHeld - right.daysHeld;
+  });
+  const sortedMarathonTerritories = [...marathonDisplays].sort((left, right) => {
+    if (selectedZone?.kind === 'marathon' && left.territory.id === selectedZone.id) {
+      return 1;
+    }
+
+    if (selectedZone?.kind === 'marathon' && right.territory.id === selectedZone.id) {
+      return -1;
+    }
+
+    return left.hoursRemaining - right.hoursRemaining;
   });
 
   const snapToPosition = (position: number) => {
@@ -579,7 +656,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
   const handleToggleCommandDrawer = () => {
     if (isSheetMinimized) {
-      snapToPosition(selectedTerritory ? HALF_HEIGHT : COLLAPSED_HEIGHT);
+      snapToPosition(selectedTerritory || selectedMarathon ? HALF_HEIGHT : COLLAPSED_HEIGHT);
       return;
     }
 
@@ -734,6 +811,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
         if (isMounted.current) {
           setTerritories(getMockTerritories(centerLat, centerLng));
+          setMarathonTerritories(
+            getMockMarathonTerritories(centerLat, centerLng, {
+              id: currentUserId,
+              name: currentUserName,
+            }),
+          );
         }
         return;
       }
@@ -745,6 +828,13 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           return;
         }
 
+        setMarathonTerritories(
+          getMockMarathonTerritories(mapRegion.latitude, mapRegion.longitude, {
+            id: currentUserId,
+            name: currentUserName,
+          }),
+        );
+
         if (Array.isArray(loaded) && loaded.length > 0) {
           setTerritories(loaded as Territory[]);
         } else {
@@ -753,6 +843,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       } catch {
         if (isMounted.current) {
           setTerritories(getMockTerritories(mapRegion.latitude, mapRegion.longitude));
+          setMarathonTerritories(
+            getMockMarathonTerritories(mapRegion.latitude, mapRegion.longitude, {
+              id: currentUserId,
+              name: currentUserName,
+            }),
+          );
         }
       }
     };
@@ -761,6 +857,8 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   }, [
     mapRegion.latitude,
     mapRegion.longitude,
+    currentUserId,
+    currentUserName,
     useMockTerritories,
     userLocation?.latitude,
     userLocation?.longitude,
@@ -778,7 +876,13 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
     mockSeedKeyRef.current = seedKey;
     setTerritories(getMockTerritories(userLocation.latitude, userLocation.longitude));
-  }, [useMockTerritories, userLocation]);
+    setMarathonTerritories(
+      getMockMarathonTerritories(userLocation.latitude, userLocation.longitude, {
+        id: currentUserId,
+        name: currentUserName,
+      }),
+    );
+  }, [currentUserId, currentUserName, useMockTerritories, userLocation]);
 
   useEffect(() => {
     if (!isSelectedTerritoryOwnedByCurrentUser && isDecorationDrawerOpen) {
@@ -881,14 +985,21 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
   useEffect(() => {
     if (
-      selectedTerritoryId &&
-      !territoryDisplays.some(
-        display => display.territory.id === selectedTerritoryId,
-      )
+      selectedZone?.kind === 'claimed' &&
+      !territoryDisplays.some(display => display.territory.id === selectedZone.id)
     ) {
-      setSelectedTerritoryId(null);
+      setSelectedZone(null);
     }
-  }, [selectedTerritoryId, territoryDisplays]);
+  }, [selectedZone, territoryDisplays]);
+
+  useEffect(() => {
+    if (
+      selectedZone?.kind === 'marathon' &&
+      !marathonDisplays.some(display => display.territory.id === selectedZone.id)
+    ) {
+      setSelectedZone(null);
+    }
+  }, [marathonDisplays, selectedZone]);
 
   const handleCenterOnUser = () => {
     if (!userLocation || !mapRef.current) {
@@ -906,8 +1017,8 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     );
   };
 
-  const handleTerritoryPress = (territoryId: string) => {
-    setSelectedTerritoryId(territoryId);
+  const handleTerritoryPress = (zone: NonNullable<SelectedMapZone>) => {
+    setSelectedZone(zone);
     snapToPosition(HALF_HEIGHT);
   };
 
@@ -943,6 +1054,17 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     Alert.alert(
       'Challenge Started',
       `${selectedTerritory.name} is now contested. Complete a clean loop to overtake it.`,
+    );
+  };
+
+  const handleJoinMarathon = () => {
+    if (!selectedMarathon) {
+      return;
+    }
+
+    Alert.alert(
+      'Marathon Joined',
+      `${selectedMarathon.territory.name} is live for ${selectedMarathon.territory.durationDays} days. Complete the track to bank the base score, then climb the leaderboard with speed, time, and weather bonuses.`,
     );
   };
 
@@ -1190,7 +1312,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         `+${xpEarned} XP`,
         `${getTerritoryName(newTerritory)} captured`,
       );
-      setSelectedTerritoryId(newTerritory.id);
+      setSelectedZone({ kind: 'claimed', id: newTerritory.id });
       setActiveRun(
         hydratePathRewardState({
         state: 'idle',
@@ -1222,6 +1344,41 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   const simplifiedPreview = simplifyPolygon(activeRun.path);
   const previewBoundary =
     simplifiedPreview.length > 2 ? simplifiedPreview : activeRun.path;
+  const selectedMarathonIntel: MarathonIntel | null = selectedMarathon
+    ? {
+        id: selectedMarathon.territory.id,
+        name: selectedMarathon.territory.name,
+        areaM2: selectedMarathon.territory.area * 1_000_000,
+        distanceKm: selectedMarathon.territory.distanceKm,
+        daysRemaining: selectedMarathon.daysRemaining,
+        hoursRemaining: selectedMarathon.hoursRemaining,
+        durationDays: selectedMarathon.territory.durationDays,
+        baseCompletionScore: selectedMarathon.territory.baseCompletionScore,
+        weatherLabel: selectedMarathon.territory.weatherLabel,
+        weatherBonusNote: selectedMarathon.territory.weatherBonusNote,
+        leaderboard: selectedMarathon.territory.leaderboard.map(entry => ({
+          rank: entry.rank,
+          userId: entry.userId,
+          username: entry.username,
+          baseCompletionScore: entry.baseCompletionScore,
+          speedBonus: entry.speedBonus,
+          timeBonus: entry.timeBonus,
+          weatherBonus: entry.weatherBonus,
+          totalScore: entry.totalScore,
+          reward:
+            entry.rank === 1
+              ? '2 powerups + 500 coins'
+              : entry.rank === 2
+                ? '1 powerup + 200 coins'
+                : entry.rank === 3
+                  ? '100 coins'
+                  : entry.rank <= 10
+                    ? '50 coins'
+                    : 'No reward',
+        })),
+      }
+    : null;
+  const selectedZoneCenter = selectedTerritory?.center ?? selectedMarathon?.center ?? null;
 
   return (
     <View style={styles.container}>
@@ -1296,7 +1453,8 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           {overlays.territories &&
             sortedTerritories.map(display => {
               const isSelected =
-                selectedTerritory?.territory.id === display.territory.id;
+                selectedZone?.kind === 'claimed' &&
+                selectedZone.id === display.territory.id;
               const isOwnedByCurrentUser =
                 display.territory.ownerId === currentUserId;
               const palette = getTerritoryPalette(
@@ -1322,7 +1480,39 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                   strokeColor={palette.stroke}
                   strokeWidth={palette.strokeWidth}
                   tappable
-                  onPress={() => handleTerritoryPress(display.territory.id)}
+                  onPress={() =>
+                    handleTerritoryPress({
+                      kind: 'claimed',
+                      id: display.territory.id,
+                    })
+                  }
+                />
+              );
+            })}
+
+          {overlays.territories &&
+            sortedMarathonTerritories.map(display => {
+              const palette = getTerritoryPalette(
+                display.status,
+                selectedZone?.kind === 'marathon' &&
+                  selectedZone.id === display.territory.id,
+                false,
+              );
+
+              return (
+                <Polygon
+                  key={display.territory.id}
+                  coordinates={display.territory.boundary}
+                  fillColor={palette.fill}
+                  strokeColor={palette.stroke}
+                  strokeWidth={palette.strokeWidth}
+                  tappable
+                  onPress={() =>
+                    handleTerritoryPress({
+                      kind: 'marathon',
+                      id: display.territory.id,
+                    })
+                  }
                 />
               );
             })}
@@ -1330,7 +1520,8 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           {overlays.territories &&
             sortedTerritories.map(display => {
               const isSelected =
-                selectedTerritory?.territory.id === display.territory.id;
+                selectedZone?.kind === 'claimed' &&
+                selectedZone.id === display.territory.id;
               const isOwnedByCurrentUser =
                 display.territory.ownerId === currentUserId;
               const palette = getTerritoryPalette(
@@ -1391,11 +1582,66 @@ const RunMap = ({ navigation }: { navigation: any }) => {
               );
             })}
 
-          {selectedTerritory && (
+          {overlays.territories &&
+            sortedMarathonTerritories.map(display => {
+              const palette = getTerritoryPalette(
+                display.status,
+                selectedZone?.kind === 'marathon' &&
+                  selectedZone.id === display.territory.id,
+                false,
+              );
+              const shouldPulse =
+                overlays.pulse &&
+                (selectedZone?.kind === 'marathon' &&
+                  selectedZone.id === display.territory.id);
+
+              return (
+                <Marker
+                  key={`${display.territory.id}-marker`}
+                  coordinate={{
+                    latitude: display.center.latitude,
+                    longitude: display.center.longitude,
+                  }}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                >
+                  <View style={styles.markerWrapper}>
+                    {shouldPulse && (
+                      <Animated.View
+                        style={[
+                          styles.markerPulse,
+                          {
+                            borderColor: palette.marker,
+                            opacity: pulseOpacity,
+                            transform: [{ scale: pulseScale }],
+                          },
+                        ]}
+                      />
+                    )}
+                    <View
+                      style={[
+                        styles.markerBadge,
+                        {
+                          backgroundColor: palette.markerBg,
+                          borderColor: palette.marker,
+                        },
+                      ]}
+                    >
+                      <Icon
+                        name="trophy-outline"
+                        size={14}
+                        color={palette.marker}
+                      />
+                    </View>
+                  </View>
+                </Marker>
+              );
+            })}
+
+          {selectedZoneCenter && (
             <Circle
               center={{
-                latitude: selectedTerritory.center.latitude,
-                longitude: selectedTerritory.center.longitude,
+                latitude: selectedZoneCenter.latitude,
+                longitude: selectedZoneCenter.longitude,
               }}
               radius={140}
               fillColor="rgba(255, 211, 77, 0.08)"
@@ -1739,6 +1985,10 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                 <Text style={styles.legendText}>Conflict</Text>
               </View>
               <View style={styles.legendItem}>
+                <View style={[styles.legendSwatch, styles.legendNeutral]} />
+                <Text style={styles.legendText}>Marathon Zone</Text>
+              </View>
+              <View style={styles.legendItem}>
                 <View style={[styles.legendSwatch, styles.legendRoute]} />
                 <Text style={styles.legendText}>Patrol Path</Text>
               </View>
@@ -1885,7 +2135,10 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                       id: selectedTerritory.territory.id,
                       name: selectedTerritory.name,
                       ownerName: selectedTerritory.territory.ownerName,
-                      status: selectedTerritory.status,
+                      status: selectedTerritory.status as
+                        | 'owned'
+                        | 'enemy'
+                        | 'contested',
                       daysHeld: selectedTerritory.daysHeld,
                       decayHoursRemaining: selectedTerritory.decayHoursRemaining,
                       areaM2: selectedTerritory.territory.area * 1_000_000,
@@ -1893,15 +2146,18 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                     }
                   : null
               }
+              selectedMarathon={selectedMarathonIntel}
               territoryCount={ownedTerritories}
               enemyCount={visibleEnemyCount}
               contestedCount={contestedCount}
+              neutralCount={visibleNeutralCount}
               distanceKm={activeRun.distance}
               durationLabel={formatTime(timer)}
               stepCount={steps}
               onStartRun={handleStartRun}
               onChallengeTerritory={handleChallengeTerritory}
               onViewOwner={handleViewOwnerProfile}
+              onJoinMarathon={handleJoinMarathon}
             />
 
             {isSelectedTerritoryOwnedByCurrentUser ? (
@@ -2089,6 +2345,9 @@ const styles = StyleSheet.create({
   },
   legendContested: {
     backgroundColor: '#F5C15D',
+  },
+  legendNeutral: {
+    backgroundColor: '#B9D8F4',
   },
   legendRoute: {
     backgroundColor: '#92F1FF',

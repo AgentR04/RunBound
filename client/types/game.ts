@@ -48,6 +48,35 @@ export interface Territory {
   runId: string; // ID of run that created this territory
 }
 
+export interface MarathonLeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  baseCompletionScore: number;
+  speedBonus: number;
+  timeBonus: number;
+  weatherBonus: number;
+  totalScore: number;
+  averageSpeed: number; // km/h
+  finishTimeHours: number; // elapsed event hours when the track was completed
+}
+
+export interface MarathonTerritory {
+  id: string;
+  name: string;
+  boundary: LocationPoint[];
+  area: number; // km²
+  distanceKm: number;
+  activityType: 'Marathon';
+  durationDays: number;
+  startsAt: Date;
+  endsAt: Date;
+  baseCompletionScore: number;
+  weatherLabel: string;
+  weatherBonusNote: string;
+  leaderboard: MarathonLeaderboardEntry[];
+}
+
 // A running session
 export interface Run {
   id: string;
