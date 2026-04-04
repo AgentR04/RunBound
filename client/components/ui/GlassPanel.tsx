@@ -17,7 +17,7 @@ interface GlassPanelProps extends ViewProps {
 
 export default function GlassPanel({
   children,
-  accentColors = ['rgba(255, 211, 125, 0.42)', 'rgba(169, 224, 255, 0.26)'],
+  accentColors = ['rgba(166, 28, 40, 0.52)', 'rgba(91, 214, 255, 0.26)'],
   style,
   contentStyle,
   ...rest
@@ -38,11 +38,13 @@ const styles = StyleSheet.create({
   },
   content: {
     borderRadius: 27,
-    backgroundColor: 'rgba(255, 252, 244, 0.94)',
+    backgroundColor: 'rgba(10, 20, 36, 0.94)',
     overflow: 'hidden',
-    shadowColor: '#B2D8F5',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+    shadowColor: '#081223',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
+    shadowOpacity: 0.28,
     shadowRadius: 18,
     elevation: 6,
   },

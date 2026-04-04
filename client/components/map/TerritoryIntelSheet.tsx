@@ -25,7 +25,7 @@ interface TerritoryIntelSheetProps {
   contestedCount: number;
   distanceKm: number;
   durationLabel: string;
-  averageSpeed: string;
+  stepCount: number;
   onStartRun: () => void;
   onChallengeTerritory: () => void;
   onViewOwner: () => void;
@@ -41,20 +41,20 @@ function getStatusAccent(status: TerritoryIntel['status']) {
   switch (status) {
     case 'owned':
       return {
-        background: 'rgba(96, 198, 118, 0.18)',
-        color: '#60C676',
+        background: 'rgba(91, 214, 255, 0.16)',
+        color: '#67E6FF',
         icon: 'shield-outline',
       };
     case 'contested':
       return {
-        background: 'rgba(247, 183, 51, 0.2)',
-        color: '#D7931E',
+        background: 'rgba(245, 193, 93, 0.18)',
+        color: '#F5C15D',
         icon: 'flame-outline',
       };
     default:
       return {
-        background: 'rgba(255, 139, 94, 0.16)',
-        color: '#FF8B5E',
+        background: 'rgba(201, 52, 64, 0.16)',
+        color: '#F05A67',
         icon: 'warning-outline',
       };
   }
@@ -67,7 +67,7 @@ export default function TerritoryIntelSheet({
   contestedCount,
   distanceKm,
   durationLabel,
-  averageSpeed,
+  stepCount,
   onStartRun,
   onChallengeTerritory,
   onViewOwner,
@@ -84,8 +84,8 @@ export default function TerritoryIntelSheet({
           <Text style={styles.metricLabel}>Session</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricValue}>{averageSpeed}</Text>
-          <Text style={styles.metricLabel}>KM/H</Text>
+          <Text style={styles.metricValue}>{stepCount}</Text>
+          <Text style={styles.metricLabel}>Steps</Text>
         </View>
       </View>
 
@@ -93,7 +93,7 @@ export default function TerritoryIntelSheet({
         <View style={styles.intelCard}>
           <View style={styles.cardHeader}>
             <View>
-              <Text style={styles.sectionEyebrow}>Territory Intel</Text>
+              <Text style={styles.sectionEyebrow}>Mission Intel</Text>
               <Text style={styles.territoryName}>{selectedTerritory.name}</Text>
             </View>
             <View
@@ -129,7 +129,7 @@ export default function TerritoryIntelSheet({
             <View style={styles.ownerMeta}>
               <Text style={styles.ownerTitle}>{selectedTerritory.ownerName}</Text>
               <Text style={styles.ownerSubtitle}>
-                {selectedTerritory.daysHeld} day hold • decay in{' '}
+                {selectedTerritory.daysHeld} day hold | decay in{' '}
                 {formatDecay(selectedTerritory.decayHoursRemaining)}
               </Text>
             </View>
@@ -140,7 +140,7 @@ export default function TerritoryIntelSheet({
               <Text style={styles.rewardValue}>
                 {selectedTerritory.areaM2.toFixed(0)}
               </Text>
-              <Text style={styles.rewardLabel}>m²</Text>
+              <Text style={styles.rewardLabel}>m2</Text>
             </View>
             <View style={styles.rewardCard}>
               <Text style={styles.rewardValue}>{selectedTerritory.strength}%</Text>
@@ -156,22 +156,22 @@ export default function TerritoryIntelSheet({
 
           <View style={styles.detailRow}>
             <View style={styles.detailPill}>
-              <Icon name="walk-outline" size={14} color="#D7931E" />
+              <Icon name="walk-outline" size={14} color="#F5C15D" />
               <Text style={styles.detailText}>
-                Any valid loop can carve a new blob
+                Avengers protocol: complete a clean loop to carve a new zone
               </Text>
             </View>
           </View>
 
           <View style={styles.actionRow}>
             <TouchableOpacity style={styles.secondaryButton} onPress={onViewOwner}>
-              <Icon name="person-circle-outline" size={18} color="#57718D" />
+              <Icon name="person-circle-outline" size={18} color="#C7D9EC" />
               <Text style={styles.secondaryButtonText}>Owner</Text>
             </TouchableOpacity>
 
             {selectedTerritory.status === 'owned' ? (
               <TouchableOpacity style={styles.primaryButtonDisabled} disabled>
-                <Icon name="shield-outline" size={18} color="#7A9AB8" />
+                <Icon name="shield-outline" size={18} color="#8299B4" />
                 <Text style={styles.primaryButtonTextMuted}>Fortified</Text>
               </TouchableOpacity>
             ) : (
@@ -179,20 +179,16 @@ export default function TerritoryIntelSheet({
                 style={styles.primaryButton}
                 onPress={onChallengeTerritory}
               >
-                <Icon name="flash-outline" size={18} color="#0D4D7A" />
-                <Text style={styles.primaryButtonText}>Challenge</Text>
+                <Icon name="flash-outline" size={18} color="#FFF3E0" />
+                <Text style={styles.primaryButtonText}>Engage</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
       ) : (
         <View style={styles.intelCard}>
-          <Text style={styles.sectionEyebrow}>Blob Control</Text>
-          <Text style={styles.territoryName}>No territory selected</Text>
-          <Text style={styles.summaryText}>
-            Every completed loop can become its own irregular territory blob. Overlaps
-            are allowed, and your own blobs stay brighter and heavier on the map.
-          </Text>
+          <Text style={styles.sectionEyebrow}>Avengers Initiative</Text>
+          <Text style={styles.territoryName}>Choose a sector or launch patrol</Text>
 
           <View style={styles.rewardGrid}>
             <View style={styles.rewardCard}>
@@ -210,8 +206,8 @@ export default function TerritoryIntelSheet({
           </View>
 
           <TouchableOpacity style={styles.primaryButton} onPress={onStartRun}>
-            <Icon name="walk-outline" size={18} color="#0D4D7A" />
-            <Text style={styles.primaryButtonText}>Start Run</Text>
+            <Icon name="walk-outline" size={18} color="#FFF3E0" />
+            <Text style={styles.primaryButtonText}>Assemble Run</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -232,28 +228,30 @@ const styles = StyleSheet.create({
   metricCard: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'rgba(13, 24, 41, 0.92)',
     borderRadius: 18,
     paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(91, 214, 255, 0.18)',
   },
   metricValue: {
-    color: '#2A4361',
+    color: '#F5FBFF',
     fontSize: 18,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
   },
   metricLabel: {
-    color: '#8096AF',
+    color: '#8EB5D8',
     fontSize: 11,
     marginTop: 2,
     textTransform: 'uppercase',
   },
   intelCard: {
-    backgroundColor: 'rgba(255, 250, 243, 0.96)',
+    backgroundColor: 'rgba(10, 20, 36, 0.96)',
     borderRadius: 26,
     padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(242, 220, 182, 0.65)',
+    borderColor: 'rgba(176, 38, 50, 0.45)',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -261,14 +259,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionEyebrow: {
-    color: '#D58A15',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   territoryName: {
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 27,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
@@ -296,14 +294,14 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: '#F2FAFF',
+    backgroundColor: '#13253D',
     borderWidth: 1,
-    borderColor: 'rgba(87, 184, 255, 0.4)',
+    borderColor: 'rgba(103, 230, 255, 0.32)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   ownerAvatarText: {
-    color: '#2A4361',
+    color: '#EAF7FF',
     fontSize: 14,
     fontWeight: '900',
   },
@@ -312,12 +310,12 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   ownerTitle: {
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 16,
     fontWeight: '800',
   },
   ownerSubtitle: {
-    color: '#7990AB',
+    color: '#9DB7D4',
     fontSize: 12,
     marginTop: 2,
   },
@@ -331,16 +329,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 18,
     paddingVertical: 13,
-    backgroundColor: '#F6FAFF',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.12)',
   },
   rewardValue: {
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 16,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
   },
   rewardLabel: {
-    color: '#7D93AC',
+    color: '#8EB5D8',
     fontSize: 11,
     marginTop: 3,
     textTransform: 'uppercase',
@@ -355,11 +355,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: '#FFF6E6',
+    backgroundColor: 'rgba(245, 193, 93, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 193, 93, 0.22)',
   },
   detailText: {
     flex: 1,
-    color: '#7A90A9',
+    color: '#DCE8F7',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -372,14 +374,16 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 52,
     borderRadius: 18,
-    backgroundColor: '#F3F8FF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.14)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   secondaryButtonText: {
-    color: '#56718D',
+    color: '#C7D9EC',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -387,9 +391,9 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 52,
     borderRadius: 18,
-    backgroundColor: '#AEE4FF',
+    backgroundColor: '#A61C28',
     borderWidth: 1,
-    borderColor: '#D3F0FF',
+    borderColor: '#D74B5B',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -399,19 +403,21 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 52,
     borderRadius: 18,
-    backgroundColor: '#ECF2F8',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   primaryButtonText: {
-    color: '#0D4D7A',
+    color: '#FFF3E0',
     fontSize: 14,
     fontWeight: '900',
   },
   primaryButtonTextMuted: {
-    color: '#7A9AB8',
+    color: '#8299B4',
     fontSize: 14,
     fontWeight: '800',
   },

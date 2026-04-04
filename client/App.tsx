@@ -22,6 +22,7 @@ import Run from './screens/Run';
 import LoginScreen from './screens/auth/LoginScreen';
 import OnboardingScreen from './screens/auth/OnboardingScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
+import { TITLE_FONT, UI_FONT } from './theme/fonts';
 
 function AuthStack() {
   const Stack = createNativeStackNavigator();
@@ -68,11 +69,11 @@ function RootStack() {
               />
             </View>
             <TouchableOpacity style={styles.addButton}>
-              <Ionicons name="add" size={18} color="#5B3A00" />
+              <Ionicons name="add" size={18} color="#FFF1D8" />
             </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.chatButton}>
-            <Ionicons name="chatbubble-outline" size={26} color="#684D12" />
+            <Ionicons name="chatbubble-outline" size={26} color="#F5C15D" />
           </TouchableOpacity>
         </View>
       );
@@ -81,19 +82,24 @@ function RootStack() {
     return (
       <Tab.Navigator
         screenOptions={{
-          tabBarInactiveBackgroundColor: '#FFF8EE',
-          tabBarActiveBackgroundColor: '#FFF8EE',
-          tabBarInactiveTintColor: '#B99A67',
-          tabBarActiveTintColor: '#F2A12D',
+          tabBarInactiveBackgroundColor: '#081223',
+          tabBarActiveBackgroundColor: '#081223',
+          tabBarInactiveTintColor: '#7F9DBB',
+          tabBarActiveTintColor: '#67E6FF',
           tabBarStyle: {
-            backgroundColor: '#FFF8EE',
-            borderTopColor: '#F2E2C3',
+            backgroundColor: '#081223',
+            borderTopColor: 'rgba(166, 28, 40, 0.34)',
             height: 82,
             paddingTop: 7,
             paddingBottom: 8,
           },
-          headerTitleStyle: { color: '#4C3612', fontWeight: '800' },
-          headerStyle: { backgroundColor: '#FFF7E9' },
+          tabBarLabelStyle: { fontFamily: UI_FONT, fontSize: 11 },
+          headerTitleStyle: {
+            color: '#F4F8FF',
+            fontWeight: '800',
+            fontFamily: TITLE_FONT,
+          },
+          headerStyle: { backgroundColor: '#0B1730' },
         }}
       >
         <Tab.Screen
@@ -149,7 +155,7 @@ function RootStack() {
 
   return (
     <>
-      <StatusBar barStyle="dark-content" showHideTransition="slide" />
+      <StatusBar barStyle="light-content" showHideTransition="slide" />
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -198,7 +204,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#FFF7E9',
+    backgroundColor: '#0B1730',
     paddingTop: 60,
     height: 100,
     flexDirection: 'row',
@@ -213,14 +219,14 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#13253D',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#FFF7E9',
-    shadowColor: '#E4C992',
+    borderColor: '#0B1730',
+    shadowColor: '#081223',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.24,
+    shadowOpacity: 0.32,
     shadowRadius: 16,
     elevation: 7,
   },
@@ -235,11 +241,11 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 20,
-    backgroundColor: '#FFD98A',
+    backgroundColor: '#A61C28',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#FFF7E9',
+    borderColor: '#0B1730',
   },
   chatButton: {
     position: 'absolute',
@@ -250,7 +256,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFF8EE',
+    backgroundColor: '#081223',
   },
   loadingLogo: {
     width: 100,
@@ -261,9 +267,10 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   loadingText: {
-    color: '#9A8662',
+    color: '#D8E5F3',
     marginTop: 10,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: UI_FONT,
   },
 });

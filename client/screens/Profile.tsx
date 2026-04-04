@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -13,7 +14,19 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../components/ui/GlassPanel';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { fetchLeaderboard, fetchUser, UserProfile } from '../services/api';
+import {
+  fetchLeaderboard,
+  fetchUser,
+  upsertUserProfile,
+  UserProfile,
+} from '../services/api';
+import {
+  ensureLocalUserProfile,
+  getRuns,
+  getTerritories,
+  getUser,
+} from '../utils/storage';
+import { TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 function StatTile({
   icon,
@@ -80,6 +93,33 @@ function LeaderCard({
   );
 }
 
+function buildFallbackProfile(params: {
+  id: string;
+  username: string;
+  email?: string | null;
+  color?: string;
+  territoriesOwned: number;
+  totalDistance: number;
+  totalRuns: number;
+  totalArea: number;
+  createdAt?: Date | string;
+}): UserProfile {
+  return {
+    id: params.id,
+    username: params.username,
+    color: params.color ?? '#57B8FF',
+    territories: Array.from({ length: params.territoriesOwned }, (_, index) => `local-${index}`),
+    territoriesOwned: params.territoriesOwned,
+    totalRuns: params.totalRuns,
+    totalDistance: params.totalDistance,
+    totalArea: params.totalArea,
+    createdAt:
+      params.createdAt instanceof Date
+        ? params.createdAt.toISOString()
+        : params.createdAt ?? new Date().toISOString(),
+  };
+}
+
 const Profile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [leaderboard, setLeaderboard] = useState<UserProfile[]>([]);
@@ -92,6 +132,15 @@ const Profile = () => {
 
   const load = useCallback(
     async (showRefresh = false) => {
+      if (!currentUserId) {
+        setProfile(null);
+        setLeaderboard([]);
+        setError('No signed-in user found.');
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
       try {
         if (showRefresh) {
           setRefreshing(true);
@@ -100,28 +149,108 @@ const Profile = () => {
         }
         setError(null);
 
-        const [profileData, leaderData] = await Promise.all([
+        const fallbackUsername =
+          user?.user_metadata?.username ?? user?.email?.split('@')[0] ?? 'Aarav';
+        const localUser = await ensureLocalUserProfile({
+          id: currentUserId,
+          username: fallbackUsername,
+        });
+        const [localRuns, localTerritories, storedUser] = await Promise.all([
+          getRuns(),
+          getTerritories(),
+          getUser(),
+        ]);
+        const ownedLocalTerritories = localTerritories.filter(
+          territory => territory.ownerId === currentUserId,
+        );
+        const userRuns = localRuns.filter(run => run.userId === currentUserId);
+        const localProfile = buildFallbackProfile({
+          id: currentUserId,
+          username: fallbackUsername,
+          email: user?.email,
+          color: storedUser?.color ?? localUser.color,
+          territoriesOwned: Math.max(
+            storedUser?.territories.length ?? 0,
+            ownedLocalTerritories.length,
+          ),
+          totalDistance: Math.max(
+            storedUser?.totalDistance ?? 0,
+            userRuns.reduce((sum, run) => sum + run.distance, 0),
+          ),
+          totalRuns: Math.max(storedUser?.totalRuns ?? 0, userRuns.length),
+          totalArea: Math.max(
+            storedUser?.totalArea ?? 0,
+            ownedLocalTerritories.reduce((sum, territory) => sum + territory.area, 0),
+          ),
+          createdAt: storedUser?.createdAt ?? localUser.createdAt,
+        });
+
+        await upsertUserProfile({
+          id: currentUserId,
+          username: fallbackUsername,
+          color: storedUser?.color ?? localUser.color,
+        }).catch(() => null);
+
+        const [profileResult, leaderboardResult] = await Promise.allSettled([
           fetchUser(currentUserId),
           fetchLeaderboard(),
         ]);
 
+        const profileData =
+          profileResult.status === 'fulfilled'
+            ? {
+                ...localProfile,
+                ...profileResult.value,
+                territories:
+                  profileResult.value.territories ?? localProfile.territories,
+                territoriesOwned:
+                  profileResult.value.territoriesOwned ??
+                  profileResult.value.territories?.length ??
+                  localProfile.territoriesOwned,
+              }
+            : localProfile;
+
+        const leaderData =
+          leaderboardResult.status === 'fulfilled' && leaderboardResult.value.length > 0
+            ? leaderboardResult.value
+            : [localProfile];
+
         setProfile(profileData);
         setLeaderboard(
-          leaderData.sort((left, right) => right.totalDistance - left.totalDistance),
+          [...leaderData]
+            .filter(Boolean)
+            .map(leader =>
+              leader.id === profileData.id
+                ? {
+                    ...leader,
+                    ...profileData,
+                    territoriesOwned:
+                      leader.territoriesOwned ?? profileData.territoriesOwned,
+                  }
+                : leader,
+            )
+            .sort((left, right) => right.totalDistance - left.totalDistance),
+        );
+        setError(
+          profileResult.status === 'fulfilled'
+            ? null
+            : 'Showing local profile while the server is unavailable.',
         );
       } catch {
-        setError('Could not load profile. Is the server running?');
+        setError('Could not load profile data.');
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [currentUserId],
+    [currentUserId, user?.email, user?.user_metadata?.username],
   );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const username =
     profile?.username ??
@@ -160,7 +289,7 @@ const Profile = () => {
   return (
     <View style={styles.screen}>
       <LinearGradient
-        colors={['#BDE8FF', '#EAF7FF', '#FFF4E2']}
+        colors={['#081223', '#10203A', '#1A2546']}
         style={styles.background}
       />
       <View style={styles.cloudTop} />
@@ -173,18 +302,18 @@ const Profile = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => load(true)}
-            colors={['#57B8FF']}
-            tintColor="#57B8FF"
-            progressBackgroundColor="#FFF8EE"
+            colors={['#67E6FF']}
+            tintColor="#67E6FF"
+            progressBackgroundColor="#10203A"
           />
         }
       >
         <GlassPanel
           style={styles.heroShell}
-          accentColors={['rgba(255, 208, 122, 0.7)', 'rgba(143, 221, 255, 0.52)']}
+          accentColors={['rgba(166, 28, 40, 0.72)', 'rgba(103, 230, 255, 0.34)']}
         >
           <LinearGradient
-            colors={['#FFF7EA', '#FFF1D8']}
+            colors={['#0D1A31', '#13253D']}
             style={styles.heroCard}
           >
             <View style={styles.heroTopRow}>
@@ -199,9 +328,12 @@ const Profile = () => {
                   {isConnected ? `${onlineUsers} online` : 'Offline'}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
-                <Icon name="log-out-outline" size={16} color="#8A4C0C" />
-                <Text style={styles.signOutText}>Sign Out</Text>
+              <TouchableOpacity
+                style={styles.signOutButton}
+                onPress={signOut}
+                accessibilityLabel="Sign out"
+              >
+                <Icon name="log-out-outline" size={18} color="#FFF1D8" />
               </TouchableOpacity>
             </View>
 
@@ -209,8 +341,12 @@ const Profile = () => {
               <View style={styles.errorBanner}>
                 <Icon name="warning-outline" size={14} color="#FF8B5E" />
                 <Text style={styles.errorText}>{error}</Text>
-                <TouchableOpacity onPress={() => load()}>
-                  <Text style={styles.retryText}>Retry</Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => load()}
+                  accessibilityLabel="Retry profile load"
+                >
+                  <Icon name="refresh" size={16} color="#4B89C0" />
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -356,7 +492,7 @@ export default Profile;
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
   },
   background: {
     ...StyleSheet.absoluteFillObject,
@@ -368,7 +504,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: 'rgba(103, 230, 255, 0.14)',
   },
   cloudBottom: {
     position: 'absolute',
@@ -377,7 +513,7 @@ const styles = StyleSheet.create({
     width: 190,
     height: 190,
     borderRadius: 95,
-    backgroundColor: 'rgba(255,255,255,0.26)',
+    backgroundColor: 'rgba(166, 28, 40, 0.14)',
   },
   content: {
     paddingHorizontal: 16,
@@ -387,14 +523,15 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
   loadingText: {
-    color: '#8C99AE',
+    color: '#D6E3F2',
     fontSize: 14,
+    fontFamily: UI_FONT,
   },
   heroShell: {
     marginTop: 4,
@@ -414,7 +551,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#FFF9EF',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   statusDot: {
     width: 8,
@@ -422,48 +559,47 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusDotLive: {
-    backgroundColor: '#57B8FF',
+    backgroundColor: '#67E6FF',
   },
   statusDotOffline: {
     backgroundColor: '#FF8B5E',
   },
   statusText: {
-    color: '#7F5B1D',
+    color: '#D9E6F3',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   signOutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    width: 38,
+    height: 38,
     borderRadius: 16,
-    backgroundColor: '#FFE6BF',
-  },
-  signOutText: {
-    color: '#8A4C0C',
-    fontSize: 12,
-    fontWeight: '800',
+    backgroundColor: '#A61C28',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorBanner: {
     marginTop: 14,
     padding: 12,
     borderRadius: 16,
-    backgroundColor: '#FFF0E9',
+    backgroundColor: 'rgba(166, 28, 40, 0.16)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   errorText: {
     flex: 1,
-    color: '#B25730',
+    color: '#F2C0C6',
     fontSize: 13,
+    fontFamily: UI_FONT,
   },
-  retryText: {
-    color: '#4B89C0',
-    fontSize: 13,
-    fontWeight: '700',
+  retryButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   profileCenter: {
     alignItems: 'center',
@@ -473,9 +609,9 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#FFF9EF',
+    backgroundColor: '#172844',
     borderWidth: 2,
-    borderColor: '#FFD48A',
+    borderColor: '#F5C15D',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -483,39 +619,43 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#D9F2FF',
+    backgroundColor: '#0C1A30',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#2A4D74',
+    color: '#E7F7FF',
     fontSize: 28,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   rankTitle: {
-    color: '#C28320',
+    color: '#F5C15D',
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 1.3,
     marginTop: 14,
+    fontFamily: UI_FONT,
   },
   username: {
-    color: '#543811',
+    color: '#F4F8FF',
     fontSize: 30,
     fontWeight: '900',
     marginTop: 4,
+    fontFamily: TITLE_FONT,
   },
   email: {
-    color: '#91A0B3',
+    color: '#9AB5D1',
     fontSize: 13,
     marginTop: 4,
+    fontFamily: UI_FONT,
   },
   progressSection: {
     marginTop: 22,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: '#FFF8EE',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   progressHeader: {
     flexDirection: 'row',
@@ -523,21 +663,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressLabel: {
-    color: '#7F90A8',
+    color: '#9AB5D1',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   progressTrack: {
     marginTop: 10,
     height: 10,
     borderRadius: 999,
-    backgroundColor: '#E1EEF8',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: '#57B8FF',
+    backgroundColor: '#67E6FF',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -555,15 +696,16 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#E8F6FF',
+    backgroundColor: 'rgba(103, 230, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
   statLabel: {
-    color: '#91A0B3',
+    color: '#9AB5D1',
     fontSize: 11,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   statValueRow: {
     marginTop: 12,
@@ -572,14 +714,16 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statValue: {
-    color: '#2B476B',
+    color: '#F4F8FF',
     fontSize: 30,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   statUnit: {
-    color: '#8C99AE',
+    color: '#9AB5D1',
     fontSize: 13,
     paddingBottom: 5,
+    fontFamily: UI_FONT,
   },
   sectionShell: {},
   sectionCard: {
@@ -592,22 +736,25 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionEyebrow: {
-    color: '#7EB8E5',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   sectionTitle: {
-    color: '#543811',
+    color: '#F4F8FF',
     fontSize: 24,
     fontWeight: '900',
     marginTop: 2,
+    fontFamily: TITLE_FONT,
   },
   sectionMeta: {
-    color: '#8C99AE',
+    color: '#9AB5D1',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   badgeGrid: {
     flexDirection: 'row',
@@ -619,7 +766,7 @@ const styles = StyleSheet.create({
     minHeight: 104,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: '#FFF9EF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   badgeCardLocked: {
     opacity: 0.65,
@@ -633,18 +780,20 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   badgeIconLive: {
-    backgroundColor: '#E8F6FF',
+    backgroundColor: 'rgba(103, 230, 255, 0.12)',
   },
   badgeIconMuted: {
-    backgroundColor: '#F1F2F4',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   badgeText: {
-    color: '#3B2A11',
+    color: '#F1F6FC',
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: TITLE_FONT,
   },
   badgeTextMuted: {
-    color: '#8C99AE',
+    color: '#9AB5D1',
+    fontFamily: UI_FONT,
   },
   podiumRow: {
     flexDirection: 'row',
@@ -668,6 +817,7 @@ const styles = StyleSheet.create({
   rankBubbleText: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   leaderAvatar: {
     width: 56,
@@ -677,33 +827,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 14,
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#172844',
   },
   leaderAvatarText: {
-    color: '#2A4D74',
+    color: '#E7F7FF',
     fontSize: 18,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   podiumName: {
-    color: '#3B2A11',
+    color: '#F1F6FC',
     fontSize: 14,
     fontWeight: '800',
     marginTop: 12,
+    fontFamily: TITLE_FONT,
   },
   podiumMeta: {
-    color: '#8C99AE',
+    color: '#9AB5D1',
     fontSize: 11,
     marginTop: 4,
+    fontFamily: UI_FONT,
   },
   podiumDistance: {
-    color: '#2B476B',
+    color: '#F4F8FF',
     fontSize: 18,
     fontWeight: '900',
     marginTop: 12,
+    fontFamily: TITLE_FONT,
   },
   listWrap: {
     borderRadius: 20,
-    backgroundColor: '#FFF9EF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
   },
   leaderRow: {
@@ -713,16 +867,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F2E8D4',
+    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   leaderRowMe: {
-    backgroundColor: '#E8F6FF',
+    backgroundColor: 'rgba(103, 230, 255, 0.12)',
   },
   leaderRank: {
-    color: '#8C99AE',
+    color: '#9AB5D1',
     fontSize: 13,
     fontWeight: '800',
     width: 28,
+    fontFamily: UI_FONT,
   },
   leaderDot: {
     width: 10,
@@ -733,24 +888,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   leaderName: {
-    color: '#3B2A11',
+    color: '#F1F6FC',
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: TITLE_FONT,
   },
   leaderSub: {
-    color: '#8C99AE',
+    color: '#9AB5D1',
     fontSize: 11,
     marginTop: 3,
+    fontFamily: UI_FONT,
   },
   leaderDistance: {
-    color: '#2B476B',
+    color: '#F4F8FF',
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   emptyText: {
-    color: '#8C99AE',
+    color: '#9AB5D1',
     fontSize: 14,
     textAlign: 'center',
     paddingVertical: 24,
+    fontFamily: UI_FONT,
   },
 });

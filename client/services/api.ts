@@ -5,15 +5,32 @@ import { Territory } from '../types/game';
 // iOS simulator and real devices can use localhost / your machine's LAN IP
 export const API_BASE =
   Platform.OS === 'android' ? 'http://10.0.2.2:3001' : 'http://localhost:3001';
+const API_TIMEOUT_MS = 4000;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-    ...options,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`API timeout after ${API_TIMEOUT_MS}ms for ${path}`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');

@@ -1,18 +1,115 @@
-// Temporary in-memory storage to replace AsyncStorage
+import appStorage from '../services/appStorage';
 import { MOCK_USER, Run, Territory, User } from '../types/game';
 
-// In-memory storage
-let runs: Run[] = [];
-let territories: Territory[] = [];
-let user: User | null = null;
+const RUNS_KEY = 'runbound:runs';
+const TERRITORIES_KEY = 'runbound:territories';
+const USER_KEY = 'runbound:user';
+
+type StoredRun = Omit<Run, 'startTime' | 'endTime'> & {
+  startTime: string;
+  endTime: string | null;
+};
+
+type StoredTerritory = Omit<Territory, 'claimedAt' | 'lastDefended'> & {
+  claimedAt: string;
+  lastDefended: string | null;
+};
+
+type StoredUser = Omit<User, 'createdAt'> & {
+  createdAt: string;
+};
+
+async function readJson<T>(key: string, fallback: T): Promise<T> {
+  try {
+    const raw = await appStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch (error) {
+    console.error(`Error reading storage key ${key}:`, error);
+    return fallback;
+  }
+}
+
+async function writeJson<T>(key: string, value: T): Promise<void> {
+  await appStorage.setItem(key, JSON.stringify(value));
+}
+
+function serializeRun(run: Run): StoredRun {
+  return {
+    ...run,
+    startTime: new Date(run.startTime).toISOString(),
+    endTime: run.endTime ? new Date(run.endTime).toISOString() : null,
+  };
+}
+
+function deserializeRun(run: StoredRun): Run {
+  return {
+    ...run,
+    startTime: new Date(run.startTime),
+    endTime: run.endTime ? new Date(run.endTime) : null,
+  };
+}
+
+function serializeTerritory(territory: Territory): StoredTerritory {
+  return {
+    ...territory,
+    claimedAt: new Date(territory.claimedAt).toISOString(),
+    lastDefended: territory.lastDefended
+      ? new Date(territory.lastDefended).toISOString()
+      : null,
+  };
+}
+
+function deserializeTerritory(territory: StoredTerritory): Territory {
+  return {
+    ...territory,
+    claimedAt: new Date(territory.claimedAt),
+    lastDefended: territory.lastDefended ? new Date(territory.lastDefended) : null,
+  };
+}
+
+function serializeUser(user: User): StoredUser {
+  return {
+    ...user,
+    createdAt: new Date(user.createdAt).toISOString(),
+  };
+}
+
+function deserializeUser(user: StoredUser): User {
+  return {
+    ...user,
+    createdAt: new Date(user.createdAt),
+  };
+}
+
+async function saveRuns(runs: Run[]): Promise<void> {
+  await writeJson(
+    RUNS_KEY,
+    runs.map(run => serializeRun(run)),
+  );
+}
+
+async function saveTerritories(territories: Territory[]): Promise<void> {
+  await writeJson(
+    TERRITORIES_KEY,
+    territories.map(territory => serializeTerritory(territory)),
+  );
+}
 
 /**
- * Save a completed run to local storage
+ * Save a completed run to local storage.
  */
 export async function saveRun(run: Run): Promise<boolean> {
   try {
-    runs.push(run);
-    console.log(`Saved run ${run.id}, total runs: ${runs.length}`);
+    const runs = await getRuns();
+    const existingIndex = runs.findIndex(existing => existing.id === run.id);
+
+    if (existingIndex >= 0) {
+      runs[existingIndex] = run;
+    } else {
+      runs.unshift(run);
+    }
+
+    await saveRuns(runs);
     return true;
   } catch (error) {
     console.error('Error saving run:', error);
@@ -21,28 +118,28 @@ export async function saveRun(run: Run): Promise<boolean> {
 }
 
 /**
- * Get all saved runs from storage
+ * Get all saved runs from storage.
  */
 export async function getRuns(): Promise<Run[]> {
-  try {
-    return runs.map(run => ({
-      ...run,
-      startTime: new Date(run.startTime),
-      endTime: run.endTime ? new Date(run.endTime) : null,
-    }));
-  } catch (error) {
-    console.error('Error loading runs:', error);
-    return [];
-  }
+  const storedRuns = await readJson<StoredRun[]>(RUNS_KEY, []);
+  return storedRuns.map(run => deserializeRun(run));
 }
 
 /**
- * Save a territory to local storage
+ * Save a territory to local storage.
  */
 export async function saveTerritory(territory: Territory): Promise<boolean> {
   try {
-    territories.push(territory);
-    console.log(`Saved territory ${territory.id}, total territories: ${territories.length}`);
+    const territories = await getTerritories();
+    const existingIndex = territories.findIndex(existing => existing.id === territory.id);
+
+    if (existingIndex >= 0) {
+      territories[existingIndex] = territory;
+    } else {
+      territories.unshift(territory);
+    }
+
+    await saveTerritories(territories);
     return true;
   } catch (error) {
     console.error('Error saving territory:', error);
@@ -51,28 +148,19 @@ export async function saveTerritory(territory: Territory): Promise<boolean> {
 }
 
 /**
- * Get all saved territories from storage
+ * Get all saved territories from storage.
  */
 export async function getTerritories(): Promise<Territory[]> {
-  try {
-    return territories.map(territory => ({
-      ...territory,
-      claimedAt: new Date(territory.claimedAt),
-      lastDefended: territory.lastDefended ? new Date(territory.lastDefended) : null,
-    }));
-  } catch (error) {
-    console.error('Error loading territories:', error);
-    return [];
-  }
+  const storedTerritories = await readJson<StoredTerritory[]>(TERRITORIES_KEY, []);
+  return storedTerritories.map(territory => deserializeTerritory(territory));
 }
 
 /**
- * Update user profile in storage
+ * Update user profile in storage.
  */
 export async function saveUser(userData: User): Promise<boolean> {
   try {
-    user = userData;
-    console.log(`Saved user ${userData.username}`);
+    await writeJson(USER_KEY, serializeUser(userData));
     return true;
   } catch (error) {
     console.error('Error saving user:', error);
@@ -81,20 +169,11 @@ export async function saveUser(userData: User): Promise<boolean> {
 }
 
 /**
- * Get user profile from storage
+ * Get user profile from storage.
  */
 export async function getUser(): Promise<User | null> {
-  try {
-    if (!user) return null;
-
-    return {
-      ...user,
-      createdAt: new Date(user.createdAt),
-    };
-  } catch (error) {
-    console.error('Error loading user:', error);
-    return null;
-  }
+  const storedUser = await readJson<StoredUser | null>(USER_KEY, null);
+  return storedUser ? deserializeUser(storedUser) : null;
 }
 
 /**
@@ -174,21 +253,27 @@ export async function updateLocalUserRewards(
 }
 
 /**
- * Update user stats after a run or territory claim
+ * Recompute user stats from persisted runs and territories.
  */
-export async function updateUserStats(
-  distanceRun?: number,
-  newTerritoryArea?: number
-): Promise<void> {
+export async function updateUserStats(): Promise<void> {
   try {
     const currentUser = await getUser();
-    if (!currentUser) return;
+    if (!currentUser) {
+      return;
+    }
+
+    const [runs, territories] = await Promise.all([getRuns(), getTerritories()]);
+    const userRuns = runs.filter(run => run.userId === currentUser.id);
+    const ownedTerritories = territories.filter(
+      territory => territory.ownerId === currentUser.id,
+    );
 
     const updatedUser: User = {
       ...currentUser,
-      totalRuns: currentUser.totalRuns + (distanceRun ? 1 : 0),
-      totalDistance: currentUser.totalDistance + (distanceRun || 0),
-      totalArea: currentUser.totalArea + (newTerritoryArea || 0),
+      territories: ownedTerritories.map(territory => territory.id),
+      totalRuns: userRuns.length,
+      totalDistance: userRuns.reduce((sum, run) => sum + run.distance, 0),
+      totalArea: ownedTerritories.reduce((sum, territory) => sum + territory.area, 0),
     };
 
     await saveUser(updatedUser);
@@ -198,21 +283,18 @@ export async function updateUserStats(
 }
 
 /**
- * Clear all stored data (for testing/development)
+ * Clear all stored data (for testing/development).
  */
 export async function clearAllData(): Promise<void> {
   try {
-    runs = [];
-    territories = [];
-    user = null;
-    console.log('Cleared all data');
+    await appStorage.multiRemove([RUNS_KEY, TERRITORIES_KEY, USER_KEY]);
   } catch (error) {
     console.error('Error clearing data:', error);
   }
 }
 
 /**
- * Get storage info for debugging
+ * Get storage info for debugging.
  */
 export async function getStorageInfo(): Promise<{
   runs: number;
@@ -220,14 +302,16 @@ export async function getStorageInfo(): Promise<{
   hasUser: boolean;
 }> {
   try {
-    const currentRuns = await getRuns();
-    const currentTerritories = await getTerritories();
-    const currentUser = await getUser();
+    const [runs, territories, user] = await Promise.all([
+      getRuns(),
+      getTerritories(),
+      getUser(),
+    ]);
 
     return {
-      runs: currentRuns.length,
-      territories: currentTerritories.length,
-      hasUser: !!currentUser,
+      runs: runs.length,
+      territories: territories.length,
+      hasUser: !!user,
     };
   } catch (error) {
     console.error('Error getting storage info:', error);

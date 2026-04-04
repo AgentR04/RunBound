@@ -23,6 +23,7 @@ import ActivityStorage, {
   AnalyticsData,
 } from '../services/ActivityStorage';
 import AchievementService, { Achievement } from '../services/AchievementService';
+import { TITLE_FONT, UI_FONT } from '../theme/fonts';
 import {
   calculateConsistencyScore,
   calculateIntensityScore,
@@ -86,7 +87,7 @@ const Analytics: React.FC = () => {
     return (
       <View style={styles.loadingContainer}>
         <LinearGradient
-          colors={['#BEE8FF', '#EAF7FF', '#FFF5E3']}
+          colors={['#081223', '#10203A', '#1A2546']}
           style={styles.background}
         />
         <Text style={styles.loadingText}>Loading analytics...</Text>
@@ -123,7 +124,7 @@ const Analytics: React.FC = () => {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#BEE8FF', '#EAF7FF', '#FFF5E3']}
+        colors={['#081223', '#10203A', '#1A2546']}
         style={styles.background}
       />
       <View style={styles.cloudTop} />
@@ -137,18 +138,18 @@ const Analytics: React.FC = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#57B8FF']}
-            tintColor="#57B8FF"
-            progressBackgroundColor="#FFF8EE"
+            colors={['#67E6FF']}
+            tintColor="#67E6FF"
+            progressBackgroundColor="#10203A"
           />
         }
       >
         <GlassPanel
           style={styles.heroShell}
-          accentColors={['rgba(255, 208, 122, 0.7)', 'rgba(143, 221, 255, 0.55)']}
+          accentColors={['rgba(166, 28, 40, 0.72)', 'rgba(103, 230, 255, 0.34)']}
         >
           <LinearGradient
-            colors={['#FFF8EE', '#FFF1DA']}
+            colors={['#0D1A31', '#13253D']}
             style={styles.heroCard}
           >
             <View style={styles.heroTop}>
@@ -161,7 +162,7 @@ const Analytics: React.FC = () => {
                 </Text>
               </View>
               <TouchableOpacity style={styles.syncButton} onPress={onRefresh}>
-                <Ionicons name="sync-outline" size={22} color="#0D4D7A" />
+                <Ionicons name="sync-outline" size={22} color="#FFF1D8" />
               </TouchableOpacity>
             </View>
 
@@ -259,8 +260,8 @@ const Analytics: React.FC = () => {
                     progress={consistencyScore}
                     size={116}
                     strokeWidth={8}
-                    color="#57B8FF"
-                    backgroundColor="#E5EFF7"
+                    color="#67E6FF"
+                    backgroundColor="rgba(255,255,255,0.08)"
                   >
                     <View style={styles.progressRingContent}>
                       <Text style={styles.progressRingValue}>{consistencyScore}%</Text>
@@ -274,8 +275,8 @@ const Analytics: React.FC = () => {
                     progress={avgIntensity}
                     size={116}
                     strokeWidth={8}
-                    color="#FF8B5E"
-                    backgroundColor="#E5EFF7"
+                    color="#D84452"
+                    backgroundColor="rgba(255,255,255,0.08)"
                   >
                     <View style={styles.progressRingContent}>
                       <Text style={styles.progressRingValue}>
@@ -291,8 +292,8 @@ const Analytics: React.FC = () => {
                     progress={Math.min(100, (currentWeekDistance / 10) * 100)}
                     size={116}
                     strokeWidth={8}
-                    color="#F2A12D"
-                    backgroundColor="#E5EFF7"
+                    color="#F5C15D"
+                    backgroundColor="rgba(255,255,255,0.08)"
                   >
                     <View style={styles.progressRingContent}>
                       <Text style={styles.progressRingValue}>
@@ -493,7 +494,7 @@ const formatRecordValue = (type: string, value: number): string => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
   },
   background: {
     ...StyleSheet.absoluteFillObject,
@@ -505,7 +506,7 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(103, 230, 255, 0.14)',
   },
   cloudBottom: {
     position: 'absolute',
@@ -514,18 +515,19 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(166, 28, 40, 0.14)',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
   },
   loadingText: {
-    color: '#6F89A6',
+    color: '#D6E3F2',
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   scrollView: {
     flex: 1,
@@ -548,30 +550,33 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroEyebrow: {
-    color: '#D58A15',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   heroTitle: {
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 31,
     fontWeight: '900',
     marginTop: 4,
+    fontFamily: TITLE_FONT,
   },
   heroSubtitle: {
-    color: '#728CAA',
+    color: '#9AB5D1',
     fontSize: 14,
     lineHeight: 21,
     marginTop: 8,
     maxWidth: '88%',
+    fontFamily: UI_FONT,
   },
   syncButton: {
     width: 48,
     height: 48,
     borderRadius: 20,
-    backgroundColor: '#AEE4FF',
+    backgroundColor: '#A61C28',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -584,28 +589,32 @@ const styles = StyleSheet.create({
   heroStat: {
     flex: 1,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.74)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.12)',
     paddingVertical: 12,
     paddingHorizontal: 12,
   },
   heroStatValue: {
-    color: '#223B57',
+    color: '#F3F8FF',
     fontSize: 20,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   heroStatLabel: {
-    color: '#768FAD',
+    color: '#9AB5D1',
     fontSize: 12,
     marginTop: 3,
+    fontFamily: UI_FONT,
   },
   timeframeSelector: {
     flexDirection: 'row',
     marginBottom: 20,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 18,
     padding: 5,
     borderWidth: 1,
-    borderColor: '#DCEAF5',
+    borderColor: 'rgba(103, 230, 255, 0.16)',
   },
   timeframeButton: {
     flex: 1,
@@ -614,32 +623,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timeframeButtonActive: {
-    backgroundColor: '#FFD98C',
+    backgroundColor: '#A61C28',
   },
   timeframeButtonText: {
-    color: '#7D93AC',
+    color: '#9AB5D1',
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   timeframeButtonTextActive: {
-    color: '#7A5010',
+    color: '#FFF1D8',
+    fontFamily: UI_FONT,
   },
   section: {
     marginBottom: 24,
   },
   sectionEyebrow: {
-    color: '#D58A15',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginBottom: 4,
+    fontFamily: UI_FONT,
   },
   sectionTitle: {
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 26,
     fontWeight: '900',
     marginBottom: 14,
+    fontFamily: TITLE_FONT,
   },
   statsGrid: {
     gap: 12,
@@ -668,15 +681,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressRingValue: {
-    color: '#28435F',
+    color: '#F4F8FF',
     fontSize: 16,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   progressRingLabel: {
-    color: '#748CA8',
+    color: '#9AB5D1',
     fontSize: 11,
     textAlign: 'center',
     marginTop: 2,
+    fontFamily: UI_FONT,
   },
   recordsGrid: {
     gap: 12,
@@ -689,10 +704,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyStateText: {
-    color: '#748CA8',
+    color: '#9AB5D1',
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
+    fontFamily: UI_FONT,
   },
   achievementsContainer: {
     gap: 12,
@@ -709,7 +725,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#F4F9FF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -722,15 +738,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 4,
+    fontFamily: TITLE_FONT,
   },
   achievementTitleUnlocked: {
-    color: '#2A4361',
+    color: '#F4F8FF',
+    fontFamily: TITLE_FONT,
   },
   achievementDescription: {
-    color: '#7A90A9',
+    color: '#9AB5D1',
     fontSize: 12,
     marginBottom: 8,
     lineHeight: 18,
+    fontFamily: UI_FONT,
   },
   achievementProgress: {
     flexDirection: 'row',
@@ -740,22 +759,24 @@ const styles = StyleSheet.create({
   achievementProgressBar: {
     flex: 1,
     height: 5,
-    backgroundColor: '#E7EEF6',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 999,
   },
   achievementProgressFill: {
     height: '100%',
-    backgroundColor: '#57B8FF',
+    backgroundColor: '#67E6FF',
     borderRadius: 999,
   },
   achievementProgressText: {
-    color: '#8096AE',
+    color: '#9AB5D1',
     fontSize: 10,
     minWidth: 30,
+    fontFamily: UI_FONT,
   },
   achievementUnlockedDate: {
-    color: '#8096AE',
+    color: '#9AB5D1',
     fontSize: 10,
+    fontFamily: UI_FONT,
   },
   achievementBadge: {
     width: 28,

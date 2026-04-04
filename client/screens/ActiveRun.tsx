@@ -36,6 +36,7 @@ import {
   isNearStartPoint,
   simplifyPolygon,
 } from '../utils/territoryUtils';
+import { TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 const DropMarker = require('../src/components/run/DropMarker').default;
 const DropsHUD = require('../src/components/run/DropsHUD').default;
@@ -46,11 +47,7 @@ const {
   syncTimedPathRewardState,
 } = require('../src/engines/DropEngine');
 
-const HEADER_FONT = Platform.select({
-  ios: 'AvenirNextCondensed-Heavy',
-  android: 'sans-serif-condensed',
-  default: undefined,
-});
+const HEADER_FONT = TITLE_FONT;
 const DEFAULT_MUMBAI_REGION = {
   latitude: 19.076,
   longitude: 72.8777,
@@ -751,7 +748,7 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
       >
         <View style={styles.drawerHandle} />
         <View style={styles.drawerTopRow}>
-          <Text style={styles.drawerEyebrow}>Frontline Command</Text>
+          <Text style={styles.drawerEyebrow}>Avengers Frontline</Text>
           <TouchableOpacity
             style={styles.drawerToggle}
             onPress={() => setIsDrawerCollapsed(previous => !previous)}
@@ -762,7 +759,7 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
             <Icon
               name={isDrawerCollapsed ? 'chevron-up' : 'chevron-down'}
               size={16}
-              color="#D58A15"
+              color="#F5C15D"
             />
           </TouchableOpacity>
         </View>
@@ -783,7 +780,7 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
             ]}
           >
             <Text style={styles.captureBadgeText}>
-              {isNearStart ? 'Ready' : `${progressPercent}%`}
+              {isNearStart ? 'Prime' : `${progressPercent}%`}
             </Text>
           </View>
         </View>
@@ -843,8 +840,8 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
 
         {isNearStart && (
           <TouchableOpacity style={styles.claimButton} onPress={handleClaim}>
-            <Icon name="trophy" size={20} color="#101114" />
-            <Text style={styles.claimButtonText}>Lock Territory</Text>
+            <Icon name="trophy" size={20} color="#FFF1D8" />
+            <Text style={styles.claimButtonText}>Secure Sector</Text>
           </TouchableOpacity>
         )}
 
@@ -925,6 +922,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   headerTitle: {
     color: '#2A4361',
@@ -954,6 +952,7 @@ const styles = StyleSheet.create({
     color: '#5F7996',
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   statsBar: {
     position: 'absolute',
@@ -985,6 +984,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 3,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   ghostBanner: {
     position: 'absolute',
@@ -1010,13 +1010,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 250, 243, 0.98)',
+    backgroundColor: 'rgba(7, 16, 31, 0.98)',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: 'rgba(241, 219, 182, 0.8)',
+    borderColor: 'rgba(166, 28, 40, 0.42)',
     paddingHorizontal: 18,
     paddingTop: 12,
   },
@@ -1030,15 +1030,16 @@ const styles = StyleSheet.create({
     width: 58,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(242, 161, 45, 0.45)',
+    backgroundColor: 'rgba(103, 230, 255, 0.45)',
     alignSelf: 'center',
   },
   drawerEyebrow: {
-    color: '#D58A15',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   drawerTopRow: {
     marginTop: 10,
@@ -1053,14 +1054,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(242, 161, 45, 0.12)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(242, 161, 45, 0.2)',
+    borderColor: 'rgba(245, 193, 93, 0.24)',
   },
   drawerToggleText: {
-    color: '#D58A15',
+    color: '#F5C15D',
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   drawerHeader: {
     marginTop: 16,
@@ -1069,15 +1071,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   drawerTitle: {
-    color: '#2A4361',
+    color: '#F3F8FF',
     fontSize: 28,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
   },
   drawerSubtitle: {
-    color: '#7A90A9',
+    color: '#98B4D1',
     fontSize: 12,
     marginTop: 4,
+    fontFamily: UI_FONT,
   },
   captureBadge: {
     minWidth: 74,
@@ -1087,15 +1090,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   captureBadgeReady: {
-    backgroundColor: '#FFD98C',
+    backgroundColor: '#A61C28',
+    borderWidth: 1,
+    borderColor: '#D74B5B',
   },
   captureBadgeIdle: {
-    backgroundColor: '#F3F8FF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: '#E0EDF7',
+    borderColor: 'rgba(103, 230, 255, 0.16)',
   },
   captureBadgeText: {
-    color: '#7A5010',
+    color: '#FFF1D8',
     fontSize: 14,
     fontWeight: '900',
   },
@@ -1103,13 +1108,13 @@ const styles = StyleSheet.create({
     marginTop: 16,
     height: 12,
     borderRadius: 999,
-    backgroundColor: '#EAF2F9',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: '#57B8FF',
+    backgroundColor: '#67E6FF',
   },
   drawerMetrics: {
     flexDirection: 'row',
@@ -1118,31 +1123,32 @@ const styles = StyleSheet.create({
   },
   drawerMetric: {
     flex: 1,
-    backgroundColor: '#F7FBFF',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 18,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E1EEF8',
+    borderColor: 'rgba(103, 230, 255, 0.12)',
   },
   drawerMetricValue: {
-    color: '#2A4361',
+    color: '#F3F8FF',
     fontSize: 16,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
     marginTop: 4,
   },
   drawerMetricLabel: {
-    color: '#7A90A9',
+    color: '#8EB5D8',
     fontSize: 11,
     marginTop: 3,
+    fontFamily: UI_FONT,
   },
   rulesCard: {
     marginTop: 16,
     borderRadius: 20,
-    backgroundColor: '#F6FAFF',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: '#E1EEF8',
+    borderColor: 'rgba(245, 193, 93, 0.14)',
     padding: 14,
   },
   rulesHeader: {
@@ -1152,33 +1158,36 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   rulesTitle: {
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: TITLE_FONT,
   },
   rulesText: {
-    color: '#748CA8',
+    color: '#9AB5D1',
     fontSize: 12,
     lineHeight: 18,
     marginTop: 4,
+    fontFamily: UI_FONT,
   },
   claimButton: {
     marginTop: 16,
     height: 54,
     borderRadius: 18,
-    backgroundColor: '#FFD98C',
-    borderWidth: 2,
-    borderColor: '#FFF0C5',
+    backgroundColor: '#A61C28',
+    borderWidth: 1,
+    borderColor: '#D74B5B',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
   },
   claimButtonText: {
-    color: '#7A5010',
+    color: '#FFF1D8',
     fontSize: 15,
     fontWeight: '900',
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   controlsRow: {
     marginTop: 16,
@@ -1190,7 +1199,9 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: '#FFB28E',
+    backgroundColor: '#A61C28',
+    borderWidth: 1,
+    borderColor: '#D74B5B',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1198,7 +1209,9 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: '#AEE4FF',
+    backgroundColor: '#67E6FF',
+    borderWidth: 1,
+    borderColor: '#C1F6FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1206,7 +1219,9 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: '#FF8B5E',
+    backgroundColor: '#162944',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },

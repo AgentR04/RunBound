@@ -1,5 +1,6 @@
 import React from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import { TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CHART_WIDTH = screenWidth - 48;
@@ -307,7 +308,7 @@ export const ProgressRing: React.FC<ProgressRingProps> = ({
   size,
   strokeWidth,
   color,
-  backgroundColor = '#E2ECF5',
+  backgroundColor = 'rgba(255,255,255,0.1)',
   children,
 }) => {
   return (
@@ -344,19 +345,20 @@ export const ProgressRing: React.FC<ProgressRingProps> = ({
 
 const styles = StyleSheet.create({
   chartContainer: {
-    backgroundColor: 'rgba(255, 250, 243, 0.96)',
+    backgroundColor: 'rgba(10, 20, 36, 0.96)',
     borderRadius: 22,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#F2E2C3',
+    borderColor: 'rgba(166, 28, 40, 0.34)',
   },
   chartTitle: {
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 16,
     textAlign: 'center',
+    fontFamily: TITLE_FONT,
   },
   chartGrid: {
     width: CHART_WIDTH,
@@ -375,10 +377,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   columnValue: {
-    color: '#7A90A9',
+    color: '#9AB5D1',
     fontSize: 10,
     fontWeight: '700',
     marginBottom: 8,
+    fontFamily: UI_FONT,
   },
   columnTrack: {
     width: '100%',
@@ -386,7 +389,7 @@ const styles = StyleSheet.create({
     height: CHART_HEIGHT * 0.65,
     justifyContent: 'flex-end',
     borderRadius: 16,
-    backgroundColor: '#F2F7FB',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
     padding: 4,
   },
@@ -396,10 +399,11 @@ const styles = StyleSheet.create({
     minHeight: 10,
   },
   columnLabel: {
-    color: '#6B85A3',
+    color: '#A6BED6',
     fontSize: 11,
     fontWeight: '700',
     marginTop: 8,
+    fontFamily: UI_FONT,
   },
   trendBars: {
     height: 90,
@@ -440,19 +444,21 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   zoneName: {
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TITLE_FONT,
   },
   zonePercent: {
-    color: '#7A90A9',
+    color: '#9AB5D1',
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   zoneTrack: {
     height: 12,
     borderRadius: 999,
-    backgroundColor: '#EEF3F7',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   zoneFill: {
@@ -466,13 +472,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   noDataText: {
-    color: '#7A90A9',
+    color: '#9AB5D1',
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: UI_FONT,
   },
   statCard: {
     flex: 1,
-    backgroundColor: 'rgba(255, 250, 243, 0.96)',
+    backgroundColor: 'rgba(10, 20, 36, 0.96)',
     borderRadius: 22,
     padding: 16,
     borderWidth: 1,
@@ -486,19 +493,22 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statCardTitle: {
-    color: '#8096AF',
+    color: '#9AB5D1',
     fontSize: 13,
     textTransform: 'uppercase',
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   statCardValue: {
     fontSize: 30,
     fontWeight: '900',
     marginBottom: 4,
+    fontFamily: TITLE_FONT,
   },
   statCardSubtitle: {
-    color: '#7A90A9',
+    color: '#9AB5D1',
     fontSize: 12,
+    fontFamily: UI_FONT,
   },
   trendContainer: {
     marginTop: 8,
@@ -506,18 +516,19 @@ const styles = StyleSheet.create({
   trendText: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   recordCard: {
-    backgroundColor: 'rgba(255, 250, 243, 0.96)',
+    backgroundColor: 'rgba(10, 20, 36, 0.96)',
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#F2E2C3',
+    borderColor: 'rgba(166, 28, 40, 0.34)',
   },
   newRecordCard: {
-    borderColor: '#F7B733',
-    backgroundColor: 'rgba(255, 243, 213, 0.88)',
+    borderColor: '#F5C15D',
+    backgroundColor: 'rgba(245, 193, 93, 0.14)',
   },
   recordHeader: {
     flexDirection: 'row',
@@ -526,30 +537,34 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   recordTitle: {
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: TITLE_FONT,
   },
   newRecordBadge: {
-    backgroundColor: '#FFD98C',
+    backgroundColor: '#A61C28',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
   newRecordText: {
-    color: '#7A5010',
+    color: '#FFF1D8',
     fontSize: 10,
     fontWeight: '900',
+    fontFamily: UI_FONT,
   },
   recordValue: {
     color: '#57B8FF',
     fontSize: 24,
     fontWeight: '900',
     marginBottom: 4,
+    fontFamily: TITLE_FONT,
   },
   recordDate: {
-    color: '#7A90A9',
+    color: '#9AB5D1',
     fontSize: 12,
+    fontFamily: UI_FONT,
   },
   progressRing: {
     justifyContent: 'center',

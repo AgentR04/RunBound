@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,10 +12,14 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../components/ui/GlassPanel';
+import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { Activity, fetchActivities } from '../services/api';
+import { TITLE_FONT, UI_FONT } from '../theme/fonts';
+import { getRuns, getTerritories } from '../utils/storage';
 
 const MAX_FEED_ITEMS = 100;
+const FEED_PANEL_MIN_HEIGHT = 210;
 
 function timeAgo(isoString: string): string {
   const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
@@ -47,6 +52,59 @@ function getActivityTheme(type: Activity['type']) {
   }
 }
 
+function buildLocalActivities(params: {
+  currentUserId?: string;
+  currentUsername?: string;
+  currentColor?: string;
+  territories: Awaited<ReturnType<typeof getTerritories>>;
+  runs: Awaited<ReturnType<typeof getRuns>>;
+}): Activity[] {
+  const territoryActivities: Activity[] = params.territories.map(territory => ({
+    id: `local-territory-${territory.id}`,
+    type: 'territory_claimed',
+    userId: territory.ownerId,
+    username:
+      territory.ownerId === params.currentUserId
+        ? params.currentUsername ?? territory.ownerName
+        : territory.ownerName,
+    userColor:
+      territory.ownerId === params.currentUserId
+        ? params.currentColor ?? territory.ownerColor
+        : territory.ownerColor,
+    timestamp: new Date(territory.claimedAt).toISOString(),
+    message: `${territory.ownerName} captured a new blob`,
+    data: {
+      territoryId: territory.id,
+      area: territory.area,
+    },
+  }));
+
+  const runActivities: Activity[] = params.runs.map(run => ({
+    id: `local-run-${run.id}`,
+    type: 'run_completed',
+    userId: run.userId,
+    username:
+      run.userId === params.currentUserId
+        ? params.currentUsername ?? 'You'
+        : 'Commander',
+    userColor: params.currentColor ?? '#57B8FF',
+    timestamp: new Date(run.endTime ?? run.startTime).toISOString(),
+    message: `Completed a ${run.distance.toFixed(2)} km run`,
+    data: {
+      distance: run.distance,
+      duration: run.duration,
+      territoryId: run.territoryClaimed ?? undefined,
+    },
+  }));
+
+  return [...territoryActivities, ...runActivities]
+    .sort(
+      (left, right) =>
+        new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+    )
+    .slice(0, MAX_FEED_ITEMS);
+}
+
 function FeedItem({ item }: { item: Activity }) {
   const theme = getActivityTheme(item.type);
   const areaText =
@@ -59,7 +117,7 @@ function FeedItem({ item }: { item: Activity }) {
   return (
     <GlassPanel
       style={styles.feedShell}
-      accentColors={[`${theme.accent}55`, 'rgba(255,255,255,0.78)']}
+      accentColors={[`${theme.accent}66`, 'rgba(103, 230, 255, 0.12)']}
     >
       <View style={styles.feedCard}>
         <View style={styles.feedTopRow}>
@@ -104,6 +162,7 @@ const Feed = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { socket, isConnected, onlineUsers } = useSocket();
+  const { user } = useAuth();
   const listRef = useRef<FlatList>(null);
 
   const load = useCallback(async (showRefresh = false) => {
@@ -112,19 +171,40 @@ const Feed = () => {
       else setLoading(true);
       setError(null);
 
-      const data = await fetchActivities(50);
-      setActivities(data);
+      try {
+        const data = await fetchActivities(50);
+        setActivities(data);
+        setError(null);
+      } catch {
+        const [localRuns, localTerritories] = await Promise.all([
+          getRuns(),
+          getTerritories(),
+        ]);
+        setActivities(
+          buildLocalActivities({
+            currentUserId: user?.id,
+            currentUsername:
+              user?.user_metadata?.username ?? user?.email?.split('@')[0],
+            currentColor: '#57B8FF',
+            territories: localTerritories,
+            runs: localRuns,
+          }),
+        );
+        setError('Showing local feed while the server is unavailable.');
+      }
     } catch {
-      setError('Could not load feed. Is the server running?');
+      setError('Could not load feed.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user?.email, user?.id, user?.user_metadata?.username]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   useEffect(() => {
     if (!socket) return;
@@ -156,10 +236,10 @@ const Feed = () => {
     return (
       <View style={styles.center}>
         <LinearGradient
-          colors={['#BEE8FF', '#E8F7FF', '#FFF5E5']}
+          colors={['#081223', '#10203A', '#1A2546']}
           style={styles.background}
         />
-        <ActivityIndicator size="large" color="#57B8FF" />
+        <ActivityIndicator size="large" color="#67E6FF" />
         <Text style={styles.loadingText}>Loading command feed...</Text>
       </View>
     );
@@ -168,7 +248,7 @@ const Feed = () => {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#BEE8FF', '#EAF7FF', '#FFF5E5']}
+        colors={['#081223', '#10203A', '#1A2546']}
         style={styles.background}
       />
       <View style={styles.cloudTop} />
@@ -183,10 +263,10 @@ const Feed = () => {
           <View style={styles.headerWrap}>
             <GlassPanel
               style={styles.heroShell}
-              accentColors={['rgba(255, 208, 122, 0.68)', 'rgba(143, 221, 255, 0.52)']}
+              accentColors={['rgba(166, 28, 40, 0.72)', 'rgba(103, 230, 255, 0.34)']}
             >
               <LinearGradient
-                colors={['#FFF8ED', '#FFF1D9']}
+                colors={['#0D1A31', '#13253D']}
                 style={styles.heroCard}
               >
                 <View style={styles.heroTop}>
@@ -216,9 +296,12 @@ const Feed = () => {
                     <Text style={styles.heroStatValue}>{highlightCount}</Text>
                     <Text style={styles.heroStatLabel}>Blob battles</Text>
                   </View>
-                  <TouchableOpacity style={styles.refreshButton} onPress={() => load(true)}>
-                    <Icon name="refresh" size={18} color="#7D510B" />
-                    <Text style={styles.refreshButtonText}>Refresh</Text>
+                  <TouchableOpacity
+                    style={styles.refreshButton}
+                    onPress={() => load(true)}
+                    accessibilityLabel="Refresh feed"
+                  >
+                    <Icon name="refresh" size={18} color="#FFF1D8" />
                   </TouchableOpacity>
                 </View>
 
@@ -239,16 +322,16 @@ const Feed = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => load(true)}
-            colors={['#57B8FF']}
-            tintColor="#57B8FF"
-            progressBackgroundColor="#FFF8EE"
+            colors={['#67E6FF']}
+            tintColor="#67E6FF"
+            progressBackgroundColor="#10203A"
           />
         }
         ListEmptyComponent={
           <GlassPanel style={styles.emptyShell}>
             <View style={styles.empty}>
               <View style={styles.emptyIconWrap}>
-                <Icon name="compass-outline" size={40} color="#57B8FF" />
+                <Icon name="compass-outline" size={40} color="#67E6FF" />
               </View>
               <Text style={styles.emptyTitle}>No activity yet</Text>
               <Text style={styles.emptySubtitle}>
@@ -268,7 +351,7 @@ export default Feed;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
   },
   background: {
     ...StyleSheet.absoluteFillObject,
@@ -280,7 +363,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: 'rgba(255,255,255,0.32)',
+    backgroundColor: 'rgba(103, 230, 255, 0.14)',
   },
   cloudBottom: {
     position: 'absolute',
@@ -289,19 +372,20 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(166, 28, 40, 0.14)',
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
     gap: 10,
   },
   loadingText: {
-    color: '#6C86A5',
+    color: '#D6E3F2',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: UI_FONT,
   },
   headerWrap: {
     paddingHorizontal: 16,
@@ -314,6 +398,7 @@ const styles = StyleSheet.create({
   heroCard: {
     paddingHorizontal: 18,
     paddingVertical: 18,
+    minHeight: FEED_PANEL_MIN_HEIGHT,
   },
   heroTop: {
     flexDirection: 'row',
@@ -322,17 +407,19 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroEyebrow: {
-    color: '#D58A15',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
+    fontFamily: UI_FONT,
   },
   heroTitle: {
-    color: '#46300E',
+    color: '#F4F8FF',
     fontSize: 28,
     fontWeight: '900',
     marginTop: 4,
+    fontFamily: TITLE_FONT,
   },
   statusPill: {
     flexDirection: 'row',
@@ -341,7 +428,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   statusDot: {
     width: 8,
@@ -349,15 +436,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusDotLive: {
-    backgroundColor: '#60C676',
+    backgroundColor: '#67E6FF',
   },
   statusDotOffline: {
     backgroundColor: '#FF8B5E',
   },
   statusText: {
-    color: '#6A85A2',
+    color: '#D7E5F2',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   heroStats: {
     flexDirection: 'row',
@@ -370,46 +458,45 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.12)',
   },
   heroStatValue: {
-    color: '#233B57',
+    color: '#F3F8FF',
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   heroStatLabel: {
-    color: '#6D85A0',
+    color: '#9AB5D1',
     fontSize: 12,
     marginTop: 2,
+    fontFamily: UI_FONT,
   },
   refreshButton: {
+    width: 46,
+    height: 46,
     borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: '#FFD98C',
-    flexDirection: 'row',
+    backgroundColor: '#A61C28',
     alignItems: 'center',
-    gap: 6,
-  },
-  refreshButtonText: {
-    color: '#7D510B',
-    fontSize: 13,
-    fontWeight: '800',
+    justifyContent: 'center',
   },
   errorBanner: {
     marginTop: 14,
     padding: 12,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 139, 94, 0.12)',
+    backgroundColor: 'rgba(166, 28, 40, 0.16)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   errorText: {
     flex: 1,
-    color: '#A05A42',
+    color: '#F2C0C6',
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: UI_FONT,
   },
   listContent: {
     paddingHorizontal: 16,
@@ -443,15 +530,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   feedTitle: {
-    color: '#223B57',
+    color: '#F1F6FC',
     fontSize: 15,
     fontWeight: '800',
     lineHeight: 21,
+    fontFamily: TITLE_FONT,
   },
   feedSubtitle: {
-    color: '#7A91AD',
+    color: '#9AB5D1',
     fontSize: 12,
     marginTop: 4,
+    fontFamily: UI_FONT,
   },
   feedTypePill: {
     borderRadius: 999,
@@ -462,6 +551,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   feedMetaRow: {
     flexDirection: 'row',
@@ -476,12 +566,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    backgroundColor: '#F3F8FF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   metaChipText: {
-    color: '#65809F',
+    color: '#C8D8E8',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   emptyShell: {
     marginTop: 10,
@@ -489,6 +580,7 @@ const styles = StyleSheet.create({
   },
   empty: {
     flex: 1,
+    minHeight: FEED_PANEL_MIN_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
@@ -498,21 +590,23 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 24,
-    backgroundColor: 'rgba(87, 184, 255, 0.12)',
+    backgroundColor: 'rgba(103, 230, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyTitle: {
     marginTop: 16,
-    color: '#26405C',
+    color: '#F4F8FF',
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   emptySubtitle: {
     marginTop: 8,
-    color: '#7A93AE',
+    color: '#9AB5D1',
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 21,
+    fontFamily: UI_FONT,
   },
 });

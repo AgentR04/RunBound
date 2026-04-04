@@ -1,7 +1,8 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../components/ui/GlassPanel';
+import { TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 const RUN_PROGRAMS = [
   {
@@ -34,27 +35,27 @@ const Run = ({ navigation }: any) => {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#BDE8FF', '#EAF7FF', '#FFF4E2']}
+        colors={['#081223', '#10203A', '#1A2546']}
         style={styles.background}
       />
       <View style={styles.cloudTop} />
       <View style={styles.cloudBottom} />
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <GlassPanel
           style={styles.heroShell}
-          accentColors={['rgba(255, 208, 122, 0.7)', 'rgba(143, 221, 255, 0.55)']}
+          accentColors={['rgba(166, 28, 40, 0.72)', 'rgba(103, 230, 255, 0.34)']}
         >
           <LinearGradient
-            colors={['#FFF8EE', '#FFF1DA']}
+            colors={['#0D1A31', '#13253D']}
             style={styles.heroCard}
           >
             <Text style={styles.heroEyebrow}>Run Center</Text>
             <Text style={styles.heroTitle}>Choose your next mission</Text>
-            <Text style={styles.heroCopy}>
-              Launch a quick run, protect your streak, or open the live map and scout
-              fresh blobs around Mumbai.
-            </Text>
 
             <View style={styles.heroStatsRow}>
               <View style={styles.heroStat}>
@@ -71,7 +72,7 @@ const Run = ({ navigation }: any) => {
               style={styles.primaryButton}
               onPress={() => navigation.navigate('Map')}
             >
-              <Ionicons name="play" size={18} color="#0B4A78" />
+              <Ionicons name="play" size={18} color="#FFF1D8" />
               <Text style={styles.primaryButtonText}>Open Map & Start</Text>
             </TouchableOpacity>
           </LinearGradient>
@@ -99,16 +100,7 @@ const Run = ({ navigation }: any) => {
             </View>
           </GlassPanel>
         ))}
-
-        <GlassPanel style={styles.tipShell}>
-          <View style={styles.tipCard}>
-            <Ionicons name="bulb-outline" size={18} color="#F2A12D" />
-            <Text style={styles.tipText}>
-              Best capture window tonight: Marine Drive, Bandra Fort, and Shivaji Park.
-            </Text>
-          </View>
-        </GlassPanel>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -118,7 +110,7 @@ export default Run;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
   },
   background: {
     ...StyleSheet.absoluteFillObject,
@@ -130,7 +122,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(103, 230, 255, 0.14)',
   },
   cloudBottom: {
     position: 'absolute',
@@ -139,10 +131,13 @@ const styles = StyleSheet.create({
     width: 170,
     height: 170,
     borderRadius: 85,
-    backgroundColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(166, 28, 40, 0.14)',
+  },
+  scrollView: {
+    flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 16,
     paddingTop: 18,
     paddingBottom: 28,
@@ -155,23 +150,19 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
   },
   heroEyebrow: {
-    color: '#D59017',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
+    fontFamily: UI_FONT,
   },
   heroTitle: {
     marginTop: 6,
-    color: '#46300F',
+    color: '#F4F8FF',
     fontSize: 29,
     fontWeight: '900',
-  },
-  heroCopy: {
-    marginTop: 8,
-    color: '#6E88A4',
-    fontSize: 14,
-    lineHeight: 21,
+    fontFamily: TITLE_FONT,
   },
   heroStatsRow: {
     flexDirection: 'row',
@@ -184,39 +175,45 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.12)',
   },
   heroStatValue: {
-    color: '#223B57',
+    color: '#F3F8FF',
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   heroStatLabel: {
     marginTop: 2,
-    color: '#738CAB',
+    color: '#9AB5D1',
     fontSize: 12,
+    fontFamily: UI_FONT,
   },
   primaryButton: {
     height: 54,
     borderRadius: 18,
-    backgroundColor: '#AEE4FF',
+    backgroundColor: '#A61C28',
     borderWidth: 1,
-    borderColor: '#D7F1FF',
+    borderColor: '#D74B5B',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   primaryButtonText: {
-    color: '#0B4A78',
+    color: '#FFF1D8',
     fontSize: 15,
     fontWeight: '900',
+    fontFamily: UI_FONT,
   },
   sectionTitle: {
-    color: '#37516E',
+    color: '#F5C15D',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 10,
+    fontFamily: TITLE_FONT,
   },
   programShell: {
     marginBottom: 12,
@@ -239,42 +236,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   programTitle: {
-    color: '#223B57',
+    color: '#F1F6FC',
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: TITLE_FONT,
   },
   programSubtitle: {
     marginTop: 4,
-    color: '#738CAA',
+    color: '#9AB5D1',
     fontSize: 13,
     lineHeight: 19,
+    fontFamily: UI_FONT,
   },
   programReward: {
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    backgroundColor: '#FFF6E7',
+    backgroundColor: 'rgba(245, 193, 93, 0.16)',
   },
   programRewardText: {
-    color: '#B77810',
+    color: '#F5C15D',
     fontSize: 12,
     fontWeight: '800',
-  },
-  tipShell: {
-    marginTop: 'auto',
-  },
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  tipText: {
-    flex: 1,
-    color: '#6B85A3',
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
+    fontFamily: UI_FONT,
   },
 });

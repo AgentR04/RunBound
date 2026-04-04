@@ -11,6 +11,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../components/ui/GlassPanel';
 import { useAuth } from '../context/AuthContext';
+import { TITLE_FONT, UI_FONT } from '../theme/fonts';
 
 function MiniStat({
   icon,
@@ -26,7 +27,7 @@ function MiniStat({
   return (
     <GlassPanel
       style={styles.miniStatShell}
-      accentColors={[`${accent}55`, 'rgba(255,255,255,0.7)']}
+      accentColors={[`${accent}66`, 'rgba(103, 230, 255, 0.12)']}
     >
       <View style={styles.miniStatCard}>
         <View style={[styles.miniStatIcon, { backgroundColor: `${accent}20` }]}>
@@ -107,7 +108,7 @@ const Home = ({ navigation }: any) => {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#BEE8FF', '#D8F1FF', '#FFF5E4']}
+        colors={['#081223', '#10203A', '#1A2546']}
         style={styles.background}
       />
       <View style={styles.cloudTop} />
@@ -120,18 +121,18 @@ const Home = ({ navigation }: any) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#57B8FF']}
-            tintColor="#57B8FF"
-            progressBackgroundColor="#FFF8EE"
+            colors={['#67E6FF']}
+            tintColor="#67E6FF"
+            progressBackgroundColor="#10203A"
           />
         }
       >
         <GlassPanel
           style={styles.headerShell}
-          accentColors={['rgba(255, 208, 122, 0.65)', 'rgba(154, 216, 255, 0.55)']}
+          accentColors={['rgba(166, 28, 40, 0.72)', 'rgba(103, 230, 255, 0.34)']}
         >
           <LinearGradient
-            colors={['#FFF8ED', '#FFF1D8']}
+            colors={['#0D1A31', '#13253D']}
             style={styles.headerCard}
           >
             <View style={styles.headerLeft}>
@@ -145,23 +146,23 @@ const Home = ({ navigation }: any) => {
               <View>
                 <Text style={styles.headerName}>{commanderName}</Text>
                 <View style={styles.pointsPill}>
-                  <Ionicons name="diamond" size={12} color="#F2A12D" />
+                  <Ionicons name="diamond" size={12} color="#F5C15D" />
                   <Text style={styles.pointsText}>12,563 war coins</Text>
                 </View>
               </View>
             </View>
             <TouchableOpacity style={styles.headerBell}>
-              <Ionicons name="notifications-outline" size={20} color="#6E4D15" />
+              <Ionicons name="notifications-outline" size={20} color="#F5C15D" />
             </TouchableOpacity>
           </LinearGradient>
         </GlassPanel>
 
         <GlassPanel
           style={styles.heroShell}
-          accentColors={['rgba(121, 208, 255, 0.72)', 'rgba(255, 229, 173, 0.6)']}
+          accentColors={['rgba(103, 230, 255, 0.42)', 'rgba(166, 28, 40, 0.72)']}
         >
           <LinearGradient
-            colors={['#FFECC3', '#FFF5DE', '#F1FBFF']}
+            colors={['#101D36', '#142645', '#1D294A']}
             style={styles.heroCard}
           >
             <View style={styles.heroBadge}>
@@ -169,7 +170,7 @@ const Home = ({ navigation }: any) => {
             </View>
             <Text style={styles.heroTitle}>Territory Bank</Text>
             <View style={styles.heroValueRow}>
-              <Ionicons name="diamond" size={34} color="#57B8FF" />
+              <Ionicons name="diamond" size={34} color="#67E6FF" />
               <Text style={styles.heroValue}>100 390</Text>
             </View>
             <Text style={styles.heroSubtitle}>
@@ -181,14 +182,14 @@ const Home = ({ navigation }: any) => {
                 style={[styles.actionButton, styles.actionButtonBlue]}
                 onPress={() => navigation.navigate('Map')}
               >
-                <Ionicons name="play-outline" size={18} color="#0E4B79" />
+                <Ionicons name="play-outline" size={18} color="#FFF1D8" />
                 <Text style={styles.actionText}>Start Run</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.actionButtonPeach]}
                 onPress={() => navigation.navigate('Map')}
               >
-                <Ionicons name="map-outline" size={18} color="#8A4C0C" />
+                <Ionicons name="map-outline" size={18} color="#FFF1D8" />
                 <Text style={styles.actionText}>View Map</Text>
               </TouchableOpacity>
             </View>
@@ -252,8 +253,12 @@ const Home = ({ navigation }: any) => {
                 <Text style={styles.sectionEyebrow}>War Log</Text>
                 <Text style={styles.sectionTitle}>Recent activity</Text>
               </View>
-              <TouchableOpacity onPress={() => navigation.navigate('Feed')}>
-                <Text style={styles.linkText}>Open feed</Text>
+              <TouchableOpacity
+                style={styles.linkButton}
+                onPress={() => navigation.navigate('Feed')}
+                accessibilityLabel="Open feed"
+              >
+                <Ionicons name="arrow-forward" size={16} color="#4A8CC4" />
               </TouchableOpacity>
             </View>
 
@@ -283,7 +288,7 @@ export default Home;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
   },
   background: {
     ...StyleSheet.absoluteFillObject,
@@ -295,7 +300,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: 'rgba(255,255,255,0.32)',
+    backgroundColor: 'rgba(103, 230, 255, 0.14)',
   },
   cloudBottom: {
     position: 'absolute',
@@ -304,20 +309,20 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(166, 28, 40, 0.14)',
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 34,
-    gap: 16,
+    paddingTop: 14,
+    paddingBottom: 26,
+    gap: 12,
   },
   headerShell: {
     marginTop: 4,
   },
   headerCard: {
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -328,32 +333,33 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   avatarRing: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: '#FFFDF9',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#172844',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFD48A',
+    borderColor: '#F5C15D',
   },
   avatarCore: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#D7F1FF',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#0C1A30',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#275079',
-    fontSize: 18,
+    color: '#E7F7FF',
+    fontSize: 15,
     fontWeight: '900',
   },
   headerName: {
-    color: '#543811',
-    fontSize: 28,
+    color: '#F5F8FD',
+    fontSize: 22,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   pointsPill: {
     marginTop: 6,
@@ -364,42 +370,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: '#FFF3D4',
+    backgroundColor: 'rgba(245, 193, 93, 0.16)',
   },
   pointsText: {
-    color: '#7A5511',
-    fontSize: 12,
+    color: '#F5C15D',
+    fontSize: 11,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   headerBell: {
-    width: 48,
-    height: 48,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.74)',
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroShell: {},
   heroCard: {
-    padding: 18,
+    padding: 15,
   },
   heroBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(245, 193, 93, 0.12)',
   },
   heroBadgeText: {
-    color: '#9A6C1C',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   heroTitle: {
-    marginTop: 18,
-    color: '#6C4C14',
-    fontSize: 18,
+    marginTop: 14,
+    color: '#F4F8FF',
+    fontSize: 16,
     fontWeight: '700',
+    fontFamily: TITLE_FONT,
   },
   heroValueRow: {
     marginTop: 8,
@@ -408,40 +417,45 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   heroValue: {
-    color: '#29476A',
-    fontSize: 48,
+    color: '#F4FBFF',
+    fontSize: 38,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   heroSubtitle: {
-    color: '#7C8CA2',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 10,
+    color: '#A9C0D8',
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 8,
+    fontFamily: UI_FONT,
   },
   actionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 22,
+    marginTop: 16,
   },
   actionButton: {
     flex: 1,
-    height: 52,
-    borderRadius: 18,
+    height: 46,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   actionButtonBlue: {
-    backgroundColor: '#D9F2FF',
+    backgroundColor: '#A61C28',
   },
   actionButtonPeach: {
-    backgroundColor: '#FFE7BF',
+    backgroundColor: '#162944',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.18)',
   },
   actionText: {
-    color: '#5A4116',
+    color: '#FFF1D8',
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   miniStatsRow: {
     flexDirection: 'row',
@@ -451,75 +465,80 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   miniStatCard: {
-    minHeight: 120,
-    paddingVertical: 16,
+    minHeight: 96,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   miniStatIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   miniStatLabel: {
-    color: '#8C99AE',
+    color: '#8EB5D8',
     fontSize: 11,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   miniStatValue: {
-    color: '#2C476B',
-    fontSize: 30,
+    color: '#F3F8FF',
+    fontSize: 24,
     fontWeight: '900',
-    marginTop: 8,
+    marginTop: 6,
+    fontFamily: TITLE_FONT,
   },
   sectionShell: {},
   sectionCard: {
-    padding: 18,
+    padding: 15,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionEyebrow: {
-    color: '#7EB8E5',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
+    fontFamily: UI_FONT,
   },
   sectionTitle: {
-    color: '#533A14',
-    fontSize: 24,
+    color: '#F4F8FF',
+    fontSize: 19,
     fontWeight: '900',
     marginTop: 2,
+    fontFamily: TITLE_FONT,
   },
   sectionChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#E6F7FF',
+    backgroundColor: 'rgba(103, 230, 255, 0.12)',
   },
   sectionChipText: {
-    color: '#4E83B0',
+    color: '#67E6FF',
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   missionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F2E8D4',
+    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   missionIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -527,44 +546,50 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   missionTitle: {
-    color: '#3B2A11',
-    fontSize: 15,
+    color: '#F1F6FC',
+    fontSize: 14,
     fontWeight: '800',
+    fontFamily: TITLE_FONT,
   },
   missionSubtitle: {
-    color: '#8F9CB0',
-    fontSize: 12,
-    lineHeight: 18,
+    color: '#9AB5D1',
+    fontSize: 11,
+    lineHeight: 16,
     marginTop: 3,
+    fontFamily: UI_FONT,
   },
   missionReward: {
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 16,
-    backgroundColor: '#FFF3D5',
+    backgroundColor: 'rgba(245, 193, 93, 0.16)',
   },
   missionRewardText: {
-    color: '#8A6117',
-    fontSize: 12,
+    color: '#F5C15D',
+    fontSize: 11,
     fontWeight: '800',
+    fontFamily: UI_FONT,
   },
-  linkText: {
-    color: '#4A8CC4',
-    fontSize: 12,
-    fontWeight: '700',
+  linkButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   logRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F2E8D4',
+    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   logIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -572,20 +597,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logTitle: {
-    color: '#3B2A11',
-    fontSize: 15,
+    color: '#F1F6FC',
+    fontSize: 14,
     fontWeight: '800',
+    fontFamily: TITLE_FONT,
   },
   logSubtitle: {
-    color: '#8F9CB0',
-    fontSize: 12,
-    marginTop: 4,
+    color: '#9AB5D1',
+    fontSize: 11,
+    marginTop: 3,
+    fontFamily: UI_FONT,
   },
   logArrow: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#EAF6FF',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },

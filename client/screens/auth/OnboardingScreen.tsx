@@ -13,6 +13,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../../components/ui/GlassPanel';
+import { TITLE_FONT, UI_FONT } from '../../theme/fonts';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -110,7 +111,7 @@ const OnboardingScreen = ({ onComplete }: OnboardingScreenProps) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" />
 
       <ScrollView
         ref={scrollRef}
@@ -123,7 +124,7 @@ const OnboardingScreen = ({ onComplete }: OnboardingScreenProps) => {
         {PANELS.map(panel => (
           <LinearGradient
             key={panel.id}
-            colors={['#BEE8FF', '#EAF7FF', '#FFF5E3']}
+            colors={['#081223', '#10203A', '#1A2546']}
             style={styles.page}
           >
             <View style={[styles.orbLarge, { backgroundColor: panel.highlight }]} />
@@ -136,10 +137,10 @@ const OnboardingScreen = ({ onComplete }: OnboardingScreenProps) => {
 
               <GlassPanel
                 style={styles.heroShell}
-                accentColors={[`${panel.accent}55`, 'rgba(255,255,255,0.78)']}
+                accentColors={['rgba(166, 28, 40, 0.52)', `${panel.accent}66`]}
               >
                 <LinearGradient
-                  colors={['#FFF9EF', '#FFF2DE']}
+                  colors={['#0D1A31', '#13253D']}
                   style={styles.heroCard}
                 >
                   <View
@@ -221,7 +222,7 @@ const OnboardingScreen = ({ onComplete }: OnboardingScreenProps) => {
           style={styles.navButtonWrap}
         >
           <LinearGradient
-            colors={[currentPanel.accent, '#FFFFFF']}
+            colors={['#A61C28', currentPanel.accent]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.navButton}
@@ -229,7 +230,7 @@ const OnboardingScreen = ({ onComplete }: OnboardingScreenProps) => {
             <Ionicons
               name={isLastPanel ? 'rocket-outline' : 'chevron-forward'}
               size={24}
-              color="#23415E"
+              color="#FFF1D8"
             />
           </LinearGradient>
         </TouchableOpacity>
@@ -241,7 +242,7 @@ const OnboardingScreen = ({ onComplete }: OnboardingScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
   },
   page: {
     width: SCREEN_WIDTH,
@@ -264,7 +265,7 @@ const styles = StyleSheet.create({
     width: 170,
     height: 170,
     borderRadius: 85,
-    backgroundColor: 'rgba(255,255,255,0.26)',
+    backgroundColor: 'rgba(166, 28, 40, 0.14)',
   },
   pageInner: {
     flex: 1,
@@ -278,6 +279,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: 14,
+    fontFamily: UI_FONT,
   },
   heroShell: {
     flex: 1,
@@ -298,17 +300,19 @@ const styles = StyleSheet.create({
   },
   title: {
     marginTop: 24,
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 34,
     fontWeight: '900',
     textAlign: 'center',
+    fontFamily: TITLE_FONT,
   },
   body: {
     marginTop: 12,
-    color: '#728CAA',
+    color: '#9AB5D1',
     fontSize: 16,
     lineHeight: 24,
     textAlign: 'center',
+    fontFamily: UI_FONT,
   },
   badge: {
     marginTop: 22,
@@ -319,6 +323,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: UI_FONT,
   },
   statsList: {
     width: '100%',
@@ -332,7 +337,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.14)',
   },
   statDot: {
     width: 10,
@@ -340,9 +347,10 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   statText: {
-    color: '#3D5673',
+    color: '#E7F1FB',
     fontSize: 15,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   bottomBar: {
     position: 'absolute',
@@ -361,7 +369,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.86)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -382,9 +390,9 @@ const styles = StyleSheet.create({
     width: 28,
   },
   dotInactive: {
-    backgroundColor: 'rgba(104, 132, 164, 0.32)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(104, 132, 164, 0.4)',
+    borderColor: 'rgba(103, 230, 255, 0.18)',
   },
 });
 

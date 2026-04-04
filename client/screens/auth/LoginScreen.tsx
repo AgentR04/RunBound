@@ -15,6 +15,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import GlassPanel from '../../components/ui/GlassPanel';
 import { useAuth } from '../../context/AuthContext';
+import { TITLE_FONT, UI_FONT } from '../../theme/fonts';
 
 interface LoginScreenProps {
   navigation: any;
@@ -54,9 +55,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" />
       <LinearGradient
-        colors={['#BEE8FF', '#EAF7FF', '#FFF3E0']}
+        colors={['#081223', '#10203A', '#1A2546']}
         style={styles.background}
       />
       <View style={styles.orbTop} />
@@ -78,10 +79,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
         <GlassPanel
           style={styles.formShell}
-          accentColors={['rgba(255, 208, 122, 0.7)', 'rgba(143, 221, 255, 0.55)']}
+          accentColors={['rgba(166, 28, 40, 0.72)', 'rgba(103, 230, 255, 0.34)']}
         >
           <LinearGradient
-            colors={['#FFF9EF', '#FFF3DF']}
+            colors={['#0D1A31', '#13253D']}
             style={styles.formCard}
           >
             <View style={styles.inputWrap}>
@@ -124,10 +125,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               disabled={loading}
             >
               <LinearGradient
-                colors={['#AEE4FF', '#87D1FF']}
+                colors={['#A61C28', '#D74B5B']}
                 style={styles.ctaGradient}
               >
-                <Ionicons name="arrow-forward" size={18} color="#0D4D7A" />
+                <Ionicons name="arrow-forward" size={18} color="#FFF1D8" />
                 <Text style={styles.ctaText}>
                   {loading ? 'Signing In...' : 'Sign In'}
                 </Text>
@@ -154,7 +155,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EAF7FF',
+    backgroundColor: '#081223',
   },
   background: {
     ...StyleSheet.absoluteFillObject,
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.32)',
+    backgroundColor: 'rgba(103, 230, 255, 0.14)',
   },
   orbBottom: {
     position: 'absolute',
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.26)',
+    backgroundColor: 'rgba(166, 28, 40, 0.14)',
   },
   content: {
     flex: 1,
@@ -191,10 +192,10 @@ const styles = StyleSheet.create({
     width: 92,
     height: 92,
     borderRadius: 32,
-    backgroundColor: '#FFF9F0',
+    backgroundColor: '#172844',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#CFE6F8',
+    shadowColor: '#081223',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.22,
     shadowRadius: 16,
@@ -207,16 +208,18 @@ const styles = StyleSheet.create({
   },
   title: {
     marginTop: 18,
-    color: '#2A4361',
+    color: '#F4F8FF',
     fontSize: 32,
     fontWeight: '900',
+    fontFamily: TITLE_FONT,
   },
   subtitle: {
     marginTop: 8,
-    color: '#728CAA',
+    color: '#9AB5D1',
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
+    fontFamily: UI_FONT,
   },
   formShell: {
     marginTop: 6,
@@ -231,13 +234,15 @@ const styles = StyleSheet.create({
     gap: 10,
     height: 58,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.14)',
     paddingHorizontal: 16,
     marginBottom: 14,
   },
   input: {
     flex: 1,
-    color: '#28435F',
+    color: '#E8F1FA',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -258,18 +263,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   ctaText: {
-    color: '#0D4D7A',
+    color: '#FFF1D8',
     fontSize: 16,
     fontWeight: '900',
+    fontFamily: UI_FONT,
   },
   secondaryLink: {
     alignItems: 'center',
     marginTop: 16,
   },
   secondaryLinkText: {
-    color: '#7A90A9',
+    color: '#9AB5D1',
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: UI_FONT,
   },
   footer: {
     flexDirection: 'row',
@@ -278,13 +285,15 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
   },
   footerText: {
-    color: '#7A90A9',
+    color: '#9AB5D1',
     fontSize: 14,
+    fontFamily: UI_FONT,
   },
   footerLink: {
-    color: '#E3911E',
+    color: '#F5C15D',
     fontSize: 14,
     fontWeight: '900',
+    fontFamily: UI_FONT,
   },
 });
 

@@ -56,6 +56,7 @@ const {
 } = require('../src/engines/DropEngine');
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const MINIMIZED_HEIGHT = 82;
 const COLLAPSED_HEIGHT = 270;
 const HALF_HEIGHT = SCREEN_HEIGHT * 0.52;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.83;
@@ -170,6 +171,10 @@ function getPlayerRankTitle(ownedTerritories: number, totalDistanceKm: number) {
   }
 
   return 'Scout';
+}
+
+function estimateSteps(distanceKm: number) {
+  return Math.max(0, Math.round(distanceKm * 1312));
 }
 
 function getTerritoryName(territory: Territory) {
@@ -292,14 +297,17 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   const [heatmapPoints, setHeatmapPoints] = useState<
     Array<{ lat: number; lng: number; intensity: number }>
   >([]);
+  const [isHudCollapsed, setIsHudCollapsed] = useState(true);
+  const [areFiltersCollapsed, setAreFiltersCollapsed] = useState(true);
 
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMounted = useRef(true);
   const hasCenteredOnUser = useRef(false);
   const mockSeedKeyRef = useRef('');
   const mapRef = useRef<MapView>(null);
-  const sheetHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
-  const lastSheetHeight = useRef(COLLAPSED_HEIGHT);
+  const [isSheetMinimized, setIsSheetMinimized] = useState(true);
+  const sheetHeight = useRef(new Animated.Value(MINIMIZED_HEIGHT)).current;
+  const lastSheetHeight = useRef(MINIMIZED_HEIGHT);
   const isAnimating = useRef(false);
   const conquestPulse = useRef(new Animated.Value(0)).current;
   const captureOpacity = useRef(new Animated.Value(0)).current;
@@ -362,6 +370,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
     isAnimating.current = true;
     lastSheetHeight.current = position;
+    setIsSheetMinimized(position <= MINIMIZED_HEIGHT + 1);
 
     Animated.spring(sheetHeight, {
       toValue: position,
@@ -374,7 +383,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   };
 
   const getNextSnapPoint = (gestureDirection: number) => {
-    const snapPoints = [COLLAPSED_HEIGHT, HALF_HEIGHT, EXPANDED_HEIGHT];
+    const snapPoints = [
+      MINIMIZED_HEIGHT,
+      COLLAPSED_HEIGHT,
+      HALF_HEIGHT,
+      EXPANDED_HEIGHT,
+    ];
 
     if (gestureDirection < -10) {
       return snapPoints.find(point => point > lastSheetHeight.current) ?? EXPANDED_HEIGHT;
@@ -425,6 +439,15 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     } catch {
       return 0;
     }
+  };
+
+  const handleToggleCommandDrawer = () => {
+    if (isSheetMinimized) {
+      snapToPosition(selectedTerritory ? HALF_HEIGHT : COLLAPSED_HEIGHT);
+      return;
+    }
+
+    snapToPosition(MINIMIZED_HEIGHT);
   };
 
   const showCaptureToast = (title: string, subtitle: string) => {
@@ -526,7 +549,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       onPanResponderMove: (_, gestureState) => {
         const nextHeight = lastSheetHeight.current - gestureState.dy;
 
-        if (nextHeight >= COLLAPSED_HEIGHT && nextHeight <= EXPANDED_HEIGHT) {
+        if (nextHeight >= MINIMIZED_HEIGHT && nextHeight <= EXPANDED_HEIGHT) {
           sheetHeight.setValue(nextHeight);
         }
       },
@@ -912,27 +935,22 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         },
       };
 
-      const saveTasks: Array<Promise<unknown>> = [
-        saveRun(completedRun),
-        updateUserStats(activeRun.distance, claimedArea),
-        saveTerritory(newTerritory),
-        apiClaimTerritory({
-          territory: newTerritory,
-          run: {
-            id: completedRun.id,
-            distance: completedRun.distance,
-            duration: completedRun.duration,
-            averagePace: completedRun.averagePace,
-            averageSpeed: completedRun.averageSpeed,
-            calories: completedRun.calories,
-            path: activeRun.path,
-          },
-        }).catch(error =>
-          console.warn('[api] territory claim failed:', error.message),
-        ),
-      ];
-
-      await Promise.all(saveTasks);
+      await Promise.all([saveRun(completedRun), saveTerritory(newTerritory)]);
+      await updateUserStats();
+      await apiClaimTerritory({
+        territory: newTerritory,
+        run: {
+          id: completedRun.id,
+          distance: completedRun.distance,
+          duration: completedRun.duration,
+          averagePace: completedRun.averagePace,
+          averageSpeed: completedRun.averageSpeed,
+          calories: completedRun.calories,
+          path: activeRun.path,
+        },
+      }).catch(error =>
+        console.warn('[api] territory claim failed:', error.message),
+      );
 
       if (isMounted.current) {
         setTerritories(previous => [...previous, newTerritory]);
@@ -967,9 +985,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const pace = getSafePace();
-  const speed = getSafeSpeed();
+  const steps = estimateSteps(activeRun.distance);
   const calories = getSafeCalories();
+  const startFabBottom = Animated.add(sheetHeight, 16);
   const pulseScale = conquestPulse.interpolate({
     inputRange: [0, 1],
     outputRange: [0.9, 1.18],
@@ -1232,145 +1250,155 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           contestedCount={contestedCount}
           rankTitle={rankTitle}
           gpsReady={!!userLocation}
+          collapsed={isHudCollapsed}
+          onToggle={() => setIsHudCollapsed(previous => !previous)}
         />
 
-        <View style={styles.overlayChipsContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.overlayChipsContent}
-          >
+        <View
+          style={[
+            styles.overlayChipsContainer,
+            isHudCollapsed && areFiltersCollapsed
+              ? styles.overlayChipsContainerCompact
+              : isHudCollapsed
+                ? styles.overlayChipsContainerCollapsed
+                : styles.overlayChipsContainerExpanded,
+          ]}
+        >
+          {areFiltersCollapsed ? (
             <TouchableOpacity
-              style={[
-                styles.filterChip,
-                overlays.territories && styles.filterChipActiveTeal,
-              ]}
-              onPress={() => handleToggleOverlay('territories')}
+              style={styles.filtersToggle}
+              onPress={() => setAreFiltersCollapsed(false)}
             >
-              <Icon
-                name="shapes-outline"
-                size={14}
-                color={overlays.territories ? '#051217' : '#F1F5FA'}
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  overlays.territories && styles.filterChipTextDark,
-                ]}
-              >
-                Blobs
-              </Text>
+              <Icon name="options-outline" size={16} color="#67E6FF" />
+              <Text style={styles.filtersToggleText}>Protocols</Text>
+              <Icon name="chevron-down" size={14} color="#F5C15D" />
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                overlays.heatmap && styles.filterChipActiveGold,
-              ]}
-              onPress={() => handleToggleOverlay('heatmap')}
-            >
-              <Icon
-                name="analytics-outline"
-                size={14}
-                color={overlays.heatmap ? '#1D1403' : '#F1F5FA'}
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  overlays.heatmap && styles.filterChipTextDarkWarm,
-                ]}
-              >
-                Intel
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                overlays.pulse && styles.filterChipActiveOrange,
-              ]}
-              onPress={() => handleToggleOverlay('pulse')}
-            >
-              <Icon
-                name="pulse-outline"
-                size={14}
-                color={overlays.pulse ? '#200A02' : '#F1F5FA'}
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  overlays.pulse && styles.filterChipTextDarkWarm,
-                ]}
-              >
-                Pulse
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                overlays.routes && styles.filterChipActiveOrange,
-              ]}
-              onPress={() => handleToggleOverlay('routes')}
-            >
-              <Icon
-                name="git-network-outline"
-                size={14}
-                color={overlays.routes ? '#200A02' : '#F1F5FA'}
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  overlays.routes && styles.filterChipTextDarkWarm,
-                ]}
-              >
-                Routes
-              </Text>
-            </TouchableOpacity>
-
-            {__DEV__ && (
+          ) : (
+            <>
               <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  useMockTerritories && styles.filterChipActiveTeal,
-                ]}
-                onPress={() => setUseMockTerritories(previous => !previous)}
+                style={styles.filtersToggle}
+                onPress={() => setAreFiltersCollapsed(true)}
               >
-                <Icon
-                  name="flask-outline"
-                  size={14}
-                  color={useMockTerritories ? '#0D4D7A' : '#5C7694'}
-                />
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    useMockTerritories && styles.filterChipTextDark,
-                  ]}
-                >
-                  Mock
-                </Text>
+                <Icon name="options-outline" size={16} color="#67E6FF" />
+                <Text style={styles.filtersToggleText}>Protocols</Text>
+                <Icon name="chevron-up" size={14} color="#F5C15D" />
               </TouchableOpacity>
-            )}
-          </ScrollView>
-        </View>
 
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendSwatch, styles.legendOwned]} />
-            <Text style={styles.legendText}>Your Blob</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendSwatch, styles.legendEnemy]} />
-            <Text style={styles.legendText}>Enemy Blob</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendSwatch, styles.legendContested]} />
-            <Text style={styles.legendText}>Contested</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendSwatch, styles.legendRoute]} />
-            <Text style={styles.legendText}>Live Loop</Text>
-          </View>
+              <View style={styles.overlayChipsContent}>
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    overlays.territories && styles.filterChipActiveTeal,
+                  ]}
+                  onPress={() => handleToggleOverlay('territories')}
+                >
+                  <Icon
+                    name="shapes-outline"
+                    size={14}
+                    color={overlays.territories ? '#051217' : '#F1F5FA'}
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      overlays.territories && styles.filterChipTextDark,
+                    ]}
+                  >
+                    Blobs
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    overlays.heatmap && styles.filterChipActiveGold,
+                  ]}
+                  onPress={() => handleToggleOverlay('heatmap')}
+                >
+                  <Icon
+                    name="analytics-outline"
+                    size={14}
+                    color={overlays.heatmap ? '#1D1403' : '#F1F5FA'}
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      overlays.heatmap && styles.filterChipTextDarkWarm,
+                    ]}
+                  >
+                    Intel
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    overlays.pulse && styles.filterChipActiveOrange,
+                  ]}
+                  onPress={() => handleToggleOverlay('pulse')}
+                >
+                  <Icon
+                    name="pulse-outline"
+                    size={14}
+                    color={overlays.pulse ? '#200A02' : '#F1F5FA'}
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      overlays.pulse && styles.filterChipTextDarkWarm,
+                    ]}
+                  >
+                    Pulse
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    overlays.routes && styles.filterChipActiveOrange,
+                  ]}
+                  onPress={() => handleToggleOverlay('routes')}
+                >
+                  <Icon
+                    name="git-network-outline"
+                    size={14}
+                    color={overlays.routes ? '#200A02' : '#F1F5FA'}
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      overlays.routes && styles.filterChipTextDarkWarm,
+                    ]}
+                  >
+                    Routes
+                  </Text>
+                </TouchableOpacity>
+
+                {__DEV__ && (
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      useMockTerritories && styles.filterChipActiveTeal,
+                    ]}
+                    onPress={() => setUseMockTerritories(previous => !previous)}
+                  >
+                    <Icon
+                      name="flask-outline"
+                      size={14}
+                      color={useMockTerritories ? '#0D4D7A' : '#5C7694'}
+                    />
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        useMockTerritories && styles.filterChipTextDark,
+                      ]}
+                    >
+                      Mock
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
         </View>
 
         <View style={styles.mapControls}>
@@ -1388,15 +1416,44 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.startFab} onPress={handleStartRun}>
-          <LinearGradient
-            colors={['#FFD34D', '#FFAA2B']}
-            style={styles.startFabGradient}
+        <Animated.View style={[styles.bottomActionRow, { bottom: startFabBottom }]}>
+          <View style={styles.legend}>
+            <Text style={styles.legendEyebrow}>TACTICAL INDEX</Text>
+            <View style={styles.legendItems}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendSwatch, styles.legendOwned]} />
+                <Text style={styles.legendText}>Avengers Zone</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendSwatch, styles.legendEnemy]} />
+                <Text style={styles.legendText}>Hostile Zone</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendSwatch, styles.legendContested]} />
+                <Text style={styles.legendText}>Conflict</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendSwatch, styles.legendRoute]} />
+                <Text style={styles.legendText}>Patrol Path</Text>
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.startFab}
+            onPress={handleStartRun}
           >
-            <Icon name="footsteps-outline" size={24} color="#121417" />
-            <Text style={styles.startFabText}>START RUN</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={['#7EEBFF', '#1A7CBE', '#A61C28']}
+              style={styles.startFabGradient}
+            >
+              <View style={styles.startFabCore}>
+                <Icon name="footsteps-outline" size={20} color="#F4FBFF" />
+                <Text style={styles.startFabText}>START</Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
 
         {activeRun.isNearStart && (
           <TouchableOpacity
@@ -1494,58 +1551,72 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       >
         <View style={styles.dragHandleContainer}>
           <View style={styles.dragHandle} />
-          <Text style={styles.bottomSheetEyebrow}>Frontline Command</Text>
+          <View style={styles.bottomSheetHeaderRow}>
+            <Text style={styles.bottomSheetEyebrow}>Avengers Field Ops</Text>
+            <TouchableOpacity
+              style={styles.bottomSheetToggle}
+              onPress={handleToggleCommandDrawer}
+            >
+              <Icon
+                name={isSheetMinimized ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color="#F5C15D"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <ScrollView
-          style={styles.sheetScroll}
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-        >
-          <TerritoryIntelSheet
-            selectedTerritory={
-              selectedTerritory
-                ? {
-                    id: selectedTerritory.territory.id,
-                    name: selectedTerritory.name,
-                    ownerName: selectedTerritory.territory.ownerName,
-                    status: selectedTerritory.status,
-                    daysHeld: selectedTerritory.daysHeld,
-                    decayHoursRemaining: selectedTerritory.decayHoursRemaining,
-                    areaM2: selectedTerritory.territory.area * 1_000_000,
-                    strength: selectedTerritory.territory.strength,
-                  }
-                : null
-            }
-            territoryCount={ownedTerritories}
-            enemyCount={visibleEnemyCount}
-            contestedCount={contestedCount}
-            distanceKm={activeRun.distance}
-            durationLabel={formatTime(timer)}
-            averageSpeed={speed}
-            onStartRun={handleStartRun}
-            onChallengeTerritory={handleChallengeTerritory}
-            onViewOwner={handleViewOwnerProfile}
-          />
+        {isSheetMinimized ? null : (
+          <ScrollView
+            style={styles.sheetScroll}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+          >
+            <TerritoryIntelSheet
+              selectedTerritory={
+                selectedTerritory
+                  ? {
+                      id: selectedTerritory.territory.id,
+                      name: selectedTerritory.name,
+                      ownerName: selectedTerritory.territory.ownerName,
+                      status: selectedTerritory.status,
+                      daysHeld: selectedTerritory.daysHeld,
+                      decayHoursRemaining: selectedTerritory.decayHoursRemaining,
+                      areaM2: selectedTerritory.territory.area * 1_000_000,
+                      strength: selectedTerritory.territory.strength,
+                    }
+                  : null
+              }
+              territoryCount={ownedTerritories}
+              enemyCount={visibleEnemyCount}
+              contestedCount={contestedCount}
+              distanceKm={activeRun.distance}
+              durationLabel={formatTime(timer)}
+              stepCount={steps}
+              onStartRun={handleStartRun}
+              onChallengeTerritory={handleChallengeTerritory}
+              onViewOwner={handleViewOwnerProfile}
+            />
 
-          <View style={styles.quickStatsRow}>
-            <View style={styles.quickStatCard}>
-              <Icon name="flame-outline" size={18} color="#FF7A45" />
-              <Text style={styles.quickStatValue}>{calories}</Text>
-              <Text style={styles.quickStatLabel}>KCAL</Text>
+            <View style={styles.quickStatsRow}>
+              <View style={styles.quickStatCard}>
+                <Icon name="flame-outline" size={18} color="#FF7A45" />
+                <Text style={styles.quickStatValue}>{calories}</Text>
+                <Text style={styles.quickStatLabel}>KCAL</Text>
+              </View>
+              <View style={styles.quickStatCard}>
+                <Icon name="footsteps-outline" size={18} color="#FFD34D" />
+                <Text style={styles.quickStatValue}>{steps}</Text>
+                <Text style={styles.quickStatLabel}>STEPS</Text>
+              </View>
+              <View style={styles.quickStatCard}>
+                <Icon name="shield-outline" size={18} color="#29F0D7" />
+                <Text style={styles.quickStatValue}>{ownedTerritories}</Text>
+                <Text style={styles.quickStatLabel}>HELD</Text>
+              </View>
             </View>
-            <View style={styles.quickStatCard}>
-              <Icon name="timer-outline" size={18} color="#FFD34D" />
-              <Text style={styles.quickStatValue}>{pace}</Text>
-              <Text style={styles.quickStatLabel}>PACE</Text>
-            </View>
-            <View style={styles.quickStatCard}>
-              <Icon name="shield-outline" size={18} color="#29F0D7" />
-              <Text style={styles.quickStatValue}>{ownedTerritories}</Text>
-              <Text style={styles.quickStatLabel}>HELD</Text>
-            </View>
-          </View>
-        </ScrollView>
+          </ScrollView>
+        )}
       </Animated.View>
     </View>
   );
@@ -1586,59 +1657,108 @@ const styles = StyleSheet.create({
   },
   overlayChipsContainer: {
     position: 'absolute',
-    top: 244,
-    left: 0,
+    left: 16,
     right: 86,
-    paddingLeft: 16,
+  },
+  overlayChipsContainerCollapsed: {
+    top: 102,
+  },
+  overlayChipsContainerCompact: {
+    top: 78,
+  },
+  overlayChipsContainerExpanded: {
+    top: 208,
+  },
+  filtersToggle: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 999,
+    backgroundColor: 'rgba(8, 18, 35, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.22)',
+  },
+  filtersToggleText: {
+    color: '#F3F8FF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   overlayChipsContent: {
     gap: 8,
+    paddingTop: 10,
     paddingRight: 16,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.86)',
+    backgroundColor: 'rgba(13, 24, 41, 0.9)',
     borderWidth: 1,
-    borderColor: 'rgba(213, 230, 243, 0.95)',
+    borderColor: 'rgba(133, 160, 189, 0.24)',
   },
   filterChipActiveTeal: {
-    backgroundColor: '#29F0D7',
-    borderColor: '#9FFFF3',
+    backgroundColor: 'rgba(91, 214, 255, 0.18)',
+    borderColor: 'rgba(103, 230, 255, 0.34)',
   },
   filterChipActiveGold: {
-    backgroundColor: '#FFD34D',
-    borderColor: '#FFEEA8',
+    backgroundColor: 'rgba(245, 193, 93, 0.18)',
+    borderColor: 'rgba(245, 193, 93, 0.34)',
   },
   filterChipActiveOrange: {
-    backgroundColor: '#FF7A45',
-    borderColor: '#FFC2AA',
+    backgroundColor: 'rgba(166, 28, 40, 0.88)',
+    borderColor: 'rgba(215, 75, 91, 0.54)',
   },
   filterChipText: {
-    color: '#5C7694',
+    color: '#D5E5F4',
     fontSize: 13,
     fontWeight: '700',
   },
   filterChipTextDark: {
-    color: '#0D4D7A',
+    color: '#67E6FF',
   },
   filterChipTextDarkWarm: {
-    color: '#7A5010',
+    color: '#FFF0D2',
   },
-  legend: {
+  bottomActionRow: {
     position: 'absolute',
     left: 16,
-    bottom: 308,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  legend: {
+    flex: 1,
+    maxWidth: '78%',
+    backgroundColor: 'rgba(8, 18, 35, 0.94)',
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: 'rgba(214, 232, 244, 0.95)',
+    borderColor: 'rgba(103, 230, 255, 0.18)',
+  },
+  legendEyebrow: {
+    color: '#F5C15D',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  legendItems: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 12,
+    rowGap: 4,
   },
   legendItem: {
     flexDirection: 'row',
@@ -1652,20 +1772,20 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   legendOwned: {
-    backgroundColor: '#29F0D7',
+    backgroundColor: '#67E6FF',
   },
   legendEnemy: {
-    backgroundColor: '#FF7A45',
+    backgroundColor: '#D84452',
   },
   legendContested: {
-    backgroundColor: '#FFD34D',
+    backgroundColor: '#F5C15D',
   },
   legendRoute: {
-    backgroundColor: '#29F0D7',
+    backgroundColor: '#92F1FF',
     opacity: 0.7,
   },
   legendText: {
-    color: '#69819F',
+    color: '#DAE8F5',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1691,32 +1811,40 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   startFab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 304,
-    borderRadius: 22,
+    borderRadius: 32,
     overflow: 'hidden',
-    shadowColor: '#FFB72E',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 193, 93, 0.38)',
+    shadowColor: '#081223',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
+    shadowOpacity: 0.36,
+    shadowRadius: 18,
     elevation: 10,
   },
   startFabGradient: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 15,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: '#FFE89A',
+    justifyContent: 'center',
+    width: 68,
+    height: 68,
+    borderRadius: 32,
+    padding: 5,
+  },
+  startFabCore: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8, 18, 35, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
   },
   startFabText: {
-    color: '#121417',
-    fontSize: 14,
+    marginTop: 2,
+    color: '#F4FBFF',
+    fontSize: 9,
     fontWeight: '900',
-    letterSpacing: 0.6,
+    letterSpacing: 1.4,
   },
   loopReadyBanner: {
     position: 'absolute',
@@ -1854,13 +1982,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 250, 243, 0.98)',
+    backgroundColor: 'rgba(7, 16, 31, 0.98)',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: 'rgba(241, 219, 182, 0.8)',
+    borderColor: 'rgba(166, 28, 40, 0.42)',
   },
   dragHandleContainer: {
     alignItems: 'center',
@@ -1871,15 +1999,32 @@ const styles = StyleSheet.create({
     width: 58,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(242, 161, 45, 0.45)',
+    backgroundColor: 'rgba(103, 230, 255, 0.45)',
   },
   bottomSheetEyebrow: {
-    marginTop: 10,
-    color: '#D58A15',
+    color: '#F5C15D',
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
+  },
+  bottomSheetHeaderRow: {
+    width: '100%',
+    marginTop: 10,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bottomSheetToggle: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 193, 93, 0.24)',
   },
   sheetScroll: {
     flex: 1,
@@ -1894,21 +2039,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F7FBFF',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 18,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#E1EEF8',
+    borderColor: 'rgba(103, 230, 255, 0.12)',
   },
   quickStatValue: {
-    color: '#2A4361',
+    color: '#F3F8FF',
     fontSize: 17,
     fontWeight: '900',
     fontFamily: HEADER_FONT,
     marginTop: 4,
   },
   quickStatLabel: {
-    color: '#7A90A9',
+    color: '#8EB5D8',
     fontSize: 11,
     marginTop: 2,
   },
