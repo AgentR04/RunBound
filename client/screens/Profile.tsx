@@ -626,7 +626,6 @@ const styles = StyleSheet.create({
   avatarText: {
     color: '#E7F7FF',
     fontSize: 28,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   rankTitle: {
@@ -641,7 +640,6 @@ const styles = StyleSheet.create({
   username: {
     color: '#F4F8FF',
     fontSize: 30,
-    fontWeight: '900',
     marginTop: 4,
     fontFamily: TITLE_FONT,
   },
@@ -716,7 +714,6 @@ const styles = StyleSheet.create({
   statValue: {
     color: '#F4F8FF',
     fontSize: 30,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   statUnit: {
@@ -746,7 +743,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: '#F4F8FF',
     fontSize: 24,
-    fontWeight: '900',
     marginTop: 2,
     fontFamily: TITLE_FONT,
   },
@@ -788,7 +784,6 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#F1F6FC',
     fontSize: 14,
-    fontWeight: '800',
     fontFamily: TITLE_FONT,
   },
   badgeTextMuted: {
@@ -832,13 +827,11 @@ const styles = StyleSheet.create({
   leaderAvatarText: {
     color: '#E7F7FF',
     fontSize: 18,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   podiumName: {
     color: '#F1F6FC',
     fontSize: 14,
-    fontWeight: '800',
     marginTop: 12,
     fontFamily: TITLE_FONT,
   },
@@ -851,7 +844,6 @@ const styles = StyleSheet.create({
   podiumDistance: {
     color: '#F4F8FF',
     fontSize: 18,
-    fontWeight: '900',
     marginTop: 12,
     fontFamily: TITLE_FONT,
   },
@@ -890,7 +882,6 @@ const styles = StyleSheet.create({
   leaderName: {
     color: '#F1F6FC',
     fontSize: 14,
-    fontWeight: '800',
     fontFamily: TITLE_FONT,
   },
   leaderSub: {

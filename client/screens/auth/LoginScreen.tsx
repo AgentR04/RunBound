@@ -210,7 +210,6 @@ const styles = StyleSheet.create({
     marginTop: 18,
     color: '#F4F8FF',
     fontSize: 32,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   subtitle: {

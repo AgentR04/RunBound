@@ -358,7 +358,6 @@ const styles = StyleSheet.create({
   headerName: {
     color: '#F5F8FD',
     fontSize: 22,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   pointsPill: {
@@ -407,7 +406,6 @@ const styles = StyleSheet.create({
     marginTop: 14,
     color: '#F4F8FF',
     fontSize: 16,
-    fontWeight: '700',
     fontFamily: TITLE_FONT,
   },
   heroValueRow: {
@@ -419,7 +417,6 @@ const styles = StyleSheet.create({
   heroValue: {
     color: '#F4FBFF',
     fontSize: 38,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   heroSubtitle: {
@@ -486,7 +483,6 @@ const styles = StyleSheet.create({
   miniStatValue: {
     color: '#F3F8FF',
     fontSize: 24,
-    fontWeight: '900',
     marginTop: 6,
     fontFamily: TITLE_FONT,
   },
@@ -511,7 +507,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: '#F4F8FF',
     fontSize: 19,
-    fontWeight: '900',
     marginTop: 2,
     fontFamily: TITLE_FONT,
   },
@@ -548,7 +543,6 @@ const styles = StyleSheet.create({
   missionTitle: {
     color: '#F1F6FC',
     fontSize: 14,
-    fontWeight: '800',
     fontFamily: TITLE_FONT,
   },
   missionSubtitle: {
@@ -599,7 +593,6 @@ const styles = StyleSheet.create({
   logTitle: {
     color: '#F1F6FC',
     fontSize: 14,
-    fontWeight: '800',
     fontFamily: TITLE_FONT,
   },
   logSubtitle: {

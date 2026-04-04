@@ -161,7 +161,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: '#F4F8FF',
     fontSize: 29,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   heroStatsRow: {
@@ -182,7 +181,6 @@ const styles = StyleSheet.create({
   heroStatValue: {
     color: '#F3F8FF',
     fontSize: 22,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   heroStatLabel: {
@@ -211,7 +209,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: '#F5C15D',
     fontSize: 18,
-    fontWeight: '800',
     marginBottom: 10,
     fontFamily: TITLE_FONT,
   },
@@ -238,7 +235,6 @@ const styles = StyleSheet.create({
   programTitle: {
     color: '#F1F6FC',
     fontSize: 16,
-    fontWeight: '800',
     fontFamily: TITLE_FONT,
   },
   programSubtitle: {

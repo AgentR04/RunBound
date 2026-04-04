@@ -355,7 +355,6 @@ const styles = StyleSheet.create({
   chartTitle: {
     color: '#F4F8FF',
     fontSize: 18,
-    fontWeight: '800',
     marginBottom: 16,
     textAlign: 'center',
     fontFamily: TITLE_FONT,
@@ -446,7 +445,6 @@ const styles = StyleSheet.create({
   zoneName: {
     color: '#F4F8FF',
     fontSize: 14,
-    fontWeight: '700',
     fontFamily: TITLE_FONT,
   },
   zonePercent: {
@@ -501,7 +499,6 @@ const styles = StyleSheet.create({
   },
   statCardValue: {
     fontSize: 30,
-    fontWeight: '900',
     marginBottom: 4,
     fontFamily: TITLE_FONT,
   },
@@ -539,7 +536,6 @@ const styles = StyleSheet.create({
   recordTitle: {
     color: '#F4F8FF',
     fontSize: 16,
-    fontWeight: '800',
     fontFamily: TITLE_FONT,
   },
   newRecordBadge: {
@@ -557,7 +553,6 @@ const styles = StyleSheet.create({
   recordValue: {
     color: '#57B8FF',
     fontSize: 24,
-    fontWeight: '900',
     marginBottom: 4,
     fontFamily: TITLE_FONT,
   },

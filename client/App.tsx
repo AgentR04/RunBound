@@ -96,7 +96,6 @@ function RootStack() {
           tabBarLabelStyle: { fontFamily: UI_FONT, fontSize: 11 },
           headerTitleStyle: {
             color: '#F4F8FF',
-            fontWeight: '800',
             fontFamily: TITLE_FONT,
           },
           headerStyle: { backgroundColor: '#0B1730' },

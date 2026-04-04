@@ -302,7 +302,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
     color: '#F4F8FF',
     fontSize: 34,
-    fontWeight: '900',
     textAlign: 'center',
     fontFamily: TITLE_FONT,
   },

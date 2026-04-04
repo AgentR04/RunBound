@@ -560,7 +560,6 @@ const styles = StyleSheet.create({
   heroTitle: {
     color: '#F4F8FF',
     fontSize: 31,
-    fontWeight: '900',
     marginTop: 4,
     fontFamily: TITLE_FONT,
   },
@@ -598,7 +597,6 @@ const styles = StyleSheet.create({
   heroStatValue: {
     color: '#F3F8FF',
     fontSize: 20,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   heroStatLabel: {
@@ -650,7 +648,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: '#F4F8FF',
     fontSize: 26,
-    fontWeight: '900',
     marginBottom: 14,
     fontFamily: TITLE_FONT,
   },
@@ -683,7 +680,6 @@ const styles = StyleSheet.create({
   progressRingValue: {
     color: '#F4F8FF',
     fontSize: 16,
-    fontWeight: '900',
     fontFamily: TITLE_FONT,
   },
   progressRingLabel: {
@@ -736,7 +732,6 @@ const styles = StyleSheet.create({
   achievementTitle: {
     color: '#90A1B5',
     fontSize: 16,
-    fontWeight: '700',
     marginBottom: 4,
     fontFamily: TITLE_FONT,
   },

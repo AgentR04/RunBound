@@ -927,7 +927,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#2A4361',
     fontSize: 26,
-    fontWeight: '900',
     fontFamily: HEADER_FONT,
     marginTop: 2,
   },
@@ -976,7 +975,6 @@ const styles = StyleSheet.create({
   statValue: {
     color: '#2A4361',
     fontSize: 18,
-    fontWeight: '900',
     fontFamily: HEADER_FONT,
   },
   statLabel: {
@@ -1073,7 +1071,6 @@ const styles = StyleSheet.create({
   drawerTitle: {
     color: '#F3F8FF',
     fontSize: 28,
-    fontWeight: '900',
     fontFamily: HEADER_FONT,
   },
   drawerSubtitle: {
@@ -1133,7 +1130,6 @@ const styles = StyleSheet.create({
   drawerMetricValue: {
     color: '#F3F8FF',
     fontSize: 16,
-    fontWeight: '900',
     fontFamily: HEADER_FONT,
     marginTop: 4,
   },
@@ -1160,7 +1156,6 @@ const styles = StyleSheet.create({
   rulesTitle: {
     color: '#F4F8FF',
     fontSize: 14,
-    fontWeight: '800',
     fontFamily: TITLE_FONT,
   },
   rulesText: {
