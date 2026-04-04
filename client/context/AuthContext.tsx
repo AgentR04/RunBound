@@ -1,6 +1,9 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+
+const ONBOARDING_PENDING_KEY_PREFIX = '@runbound_onboarding_pending:';
 
 interface AuthContextValue {
   session: Session | null;
@@ -8,6 +11,8 @@ interface AuthContextValue {
   loading: boolean;
   isLoading: boolean;
   isAuthenticated: boolean;
+  needsOnboarding: boolean;
+  onboardingLoading: boolean;
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -19,6 +24,7 @@ interface AuthContextValue {
   ) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -41,6 +47,31 @@ function logAuthError(
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [onboardingLoading, setOnboardingLoading] = useState(true);
+
+  const getOnboardingKey = (userId: string) =>
+    `${ONBOARDING_PENDING_KEY_PREFIX}${userId}`;
+
+  const loadOnboardingState = useCallback(async (userId?: string) => {
+    if (!userId) {
+      setNeedsOnboarding(false);
+      setOnboardingLoading(false);
+      return;
+    }
+
+    setOnboardingLoading(true);
+
+    try {
+      const pending = await AsyncStorage.getItem(getOnboardingKey(userId));
+      setNeedsOnboarding(pending === 'pending');
+    } catch (error) {
+      logAuthError('loadOnboardingState', error, { userId });
+      setNeedsOnboarding(false);
+    } finally {
+      setOnboardingLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -55,12 +86,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isMounted) {
           setSession(currentSession);
           setLoading(false);
+          loadOnboardingState(currentSession?.user?.id).catch(() => null);
         }
       })
       .catch(error => {
         logAuthError('getSession', error);
         if (isMounted) {
           setLoading(false);
+          setOnboardingLoading(false);
         }
       });
 
@@ -69,13 +102,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
       setLoading(false);
+      loadOnboardingState(currentSession?.user?.id).catch(() => null);
     });
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [loadOnboardingState]);
 
   const signUp = async (
     email: string,
@@ -102,6 +136,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logAuthError('signUp configuration', configError, { email, username });
       throw configError;
     }
+
+    if (data.user?.id) {
+      await AsyncStorage.setItem(getOnboardingKey(data.user.id), 'pending');
+      setNeedsOnboarding(true);
+      setOnboardingLoading(false);
+    }
   };
 
   const signIn = async (email: string, password: string): Promise<void> => {
@@ -120,6 +160,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logAuthError('signOut', error);
       throw error;
     }
+
+    setNeedsOnboarding(false);
+    setOnboardingLoading(false);
   };
 
   const refreshToken = async (): Promise<void> => {
@@ -136,12 +179,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp(email, password, username);
   const logout = () => signOut();
 
+  const completeOnboarding = async (): Promise<void> => {
+    if (!session?.user?.id) {
+      setNeedsOnboarding(false);
+      setOnboardingLoading(false);
+      return;
+    }
+
+    try {
+      await AsyncStorage.removeItem(getOnboardingKey(session.user.id));
+      setNeedsOnboarding(false);
+    } catch (error) {
+      logAuthError('completeOnboarding', error, { userId: session.user.id });
+      throw error;
+    } finally {
+      setOnboardingLoading(false);
+    }
+  };
+
   const value: AuthContextValue = {
     session,
     user: session?.user ?? null,
     loading,
     isLoading: loading,
     isAuthenticated: session !== null,
+    needsOnboarding,
+    onboardingLoading,
     signUp,
     signIn,
     signOut,
@@ -149,6 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     register,
     logout,
     refreshToken,
+    completeOnboarding,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

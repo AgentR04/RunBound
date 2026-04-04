@@ -20,6 +20,7 @@ import RunMap from './screens/Map';
 import Profile from './screens/Profile';
 import Run from './screens/Run';
 import LoginScreen from './screens/auth/LoginScreen';
+import OnboardingScreen from './screens/auth/OnboardingScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
 
 function AuthStack() {
@@ -167,10 +168,15 @@ function RootStack() {
 }
 
 function AppNavigator() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, needsOnboarding, onboardingLoading, completeOnboarding } =
+    useAuth();
 
-  if (isLoading) {
+  if (isLoading || onboardingLoading) {
     return <LoadingScreen />;
+  }
+
+  if (isAuthenticated && needsOnboarding) {
+    return <OnboardingScreen onComplete={completeOnboarding} />;
   }
 
   return isAuthenticated ? <RootStack /> : <AuthStack />;
