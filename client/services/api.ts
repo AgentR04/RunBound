@@ -60,11 +60,34 @@ export interface UserProfile {
   totalRuns: number;
   totalDistance: number;
   totalArea: number;
+  coins?: number;
+  shieldCharges?: number;
+  shieldActive?: boolean;
+  shieldExpiresAt?: string | null;
   createdAt: string;
 }
 
 export function fetchUser(userId: string): Promise<UserProfile> {
   return request<UserProfile>(`/api/users/${userId}`);
+}
+
+export interface UpsertUserProfilePayload {
+  id: string;
+  username: string;
+  color?: string;
+  coins?: number;
+  shieldCharges?: number;
+  shieldActive?: boolean;
+  shieldExpiresAt?: string | null;
+}
+
+export function upsertUserProfile(
+  payload: UpsertUserProfilePayload,
+): Promise<UserProfile> {
+  return request<UserProfile>('/api/users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export function fetchLeaderboard(): Promise<UserProfile[]> {

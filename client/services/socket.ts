@@ -39,3 +39,33 @@ export function disconnectSocket(): void {
 export function joinAsUser(userId: string): void {
   getSocket().emit('user:join', userId);
 }
+
+interface RunSocketPayload {
+  userId: string;
+  location: { latitude: number; longitude: number };
+  ghostUntil?: number | null;
+}
+
+function shouldBroadcastRunUpdate(ghostUntil?: number | null): boolean {
+  return !ghostUntil || ghostUntil <= Date.now();
+}
+
+export function emitRunStarted(payload: RunSocketPayload): void {
+  if (!shouldBroadcastRunUpdate(payload.ghostUntil)) {
+    return;
+  }
+
+  getSocket().emit('run:start', payload);
+}
+
+export function emitRunLocation(payload: RunSocketPayload): void {
+  if (!shouldBroadcastRunUpdate(payload.ghostUntil)) {
+    return;
+  }
+
+  getSocket().emit('run:location', payload);
+}
+
+export function emitRunEnded(data: { userId: string }): void {
+  getSocket().emit('run:end', data);
+}

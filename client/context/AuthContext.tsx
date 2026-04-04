@@ -1,7 +1,7 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import appStorage from '../services/appStorage';
 
 const ONBOARDING_PENDING_KEY_PREFIX = '@runbound_onboarding_pending:';
 
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOnboardingLoading(true);
 
     try {
-      const pending = await AsyncStorage.getItem(getOnboardingKey(userId));
+      const pending = await appStorage.getItem(getOnboardingKey(userId));
       setNeedsOnboarding(pending === 'pending');
     } catch (error) {
       logAuthError('loadOnboardingState', error, { userId });
@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (data.user?.id) {
-      await AsyncStorage.setItem(getOnboardingKey(data.user.id), 'pending');
+      await appStorage.setItem(getOnboardingKey(data.user.id), 'pending');
       setNeedsOnboarding(true);
       setOnboardingLoading(false);
     }
@@ -187,7 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      await AsyncStorage.removeItem(getOnboardingKey(session.user.id));
+      await appStorage.removeItem(getOnboardingKey(session.user.id));
       setNeedsOnboarding(false);
     } catch (error) {
       logAuthError('completeOnboarding', error, { userId: session.user.id });

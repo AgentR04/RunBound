@@ -1,8 +1,88 @@
 import React from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
-import { BarChart, LineChart, PieChart } from 'react-native-chart-kit';
 
 const { width: screenWidth } = Dimensions.get('window');
+const CHART_WIDTH = screenWidth - 48;
+const CHART_HEIGHT = 180;
+
+function formatCompactValue(value: number) {
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+  return value.toFixed(value % 1 === 0 ? 0 : 1);
+}
+
+function SimpleColumnChart({
+  values,
+  labels,
+  color,
+}: {
+  values: number[];
+  labels: string[];
+  color: string;
+}) {
+  const safeValues = values.length > 0 ? values : [0];
+  const maxValue = Math.max(...safeValues, 1);
+
+  return (
+    <View style={styles.columnChartWrap}>
+      <View style={styles.chartGrid}>
+        {safeValues.map((value, index) => {
+          const heightPercent = Math.max((value / maxValue) * 100, value > 0 ? 12 : 4);
+          return (
+            <View key={`${labels[index] ?? index}`} style={styles.columnSlot}>
+              <Text style={styles.columnValue}>{formatCompactValue(value)}</Text>
+              <View style={styles.columnTrack}>
+                <View
+                  style={[
+                    styles.columnFill,
+                    {
+                      backgroundColor: color,
+                      height: `${heightPercent}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.columnLabel} numberOfLines={1}>
+                {labels[index] ?? ''}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function TrendBars({
+  values,
+  color,
+}: {
+  values: number[];
+  color: string;
+}) {
+  const safeValues = values.length > 0 ? values : [0];
+  const maxValue = Math.max(...safeValues, 1);
+
+  return (
+    <View style={styles.trendBars}>
+      {safeValues.map((value, index) => (
+        <View key={`${value}-${index}`} style={styles.trendBarSlot}>
+          <View
+            style={[
+              styles.trendBar,
+              {
+                backgroundColor: color,
+                opacity: 0.35 + (value / maxValue) * 0.65,
+                height: 28 + (value / maxValue) * 80,
+              },
+            ]}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
 
 interface WeeklyProgressChartProps {
   data: number[];
@@ -15,51 +95,16 @@ export const WeeklyProgressChart: React.FC<WeeklyProgressChartProps> = ({
   data,
   labels,
   title,
-  color = '#52FF30',
+  color = '#57B8FF',
 }) => {
-  const chartConfig = {
-    backgroundColor: '#1F1F1D',
-    backgroundGradientFrom: '#1F1F1D',
-    backgroundGradientTo: '#1F1F1D',
-    decimalPlaces: 1,
-    color: (opacity = 1) => `rgba(82, 255, 48, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity * 0.8})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: '4',
-      strokeWidth: '2',
-      stroke: color,
-    },
-    propsForBackgroundLines: {
-      strokeDasharray: '',
-      stroke: 'rgba(255, 255, 255, 0.1)',
-    },
-  };
-
-  const chartData = {
-    labels: labels.slice(-8), // Show last 8 weeks
-    datasets: [
-      {
-        data: data.slice(-8),
-        color: (opacity = 1) => `rgba(82, 255, 48, ${opacity})`,
-        strokeWidth: 3,
-      },
-    ],
-  };
+  const trimmedData = data.slice(-8);
+  const trimmedLabels = labels.slice(-8);
 
   return (
     <View style={styles.chartContainer}>
       <Text style={styles.chartTitle}>{title}</Text>
-      <LineChart
-        data={chartData}
-        width={screenWidth - 32}
-        height={220}
-        chartConfig={chartConfig}
-        bezier
-        style={styles.chart}
-      />
+      <TrendBars values={trimmedData} color={color} />
+      <SimpleColumnChart values={trimmedData} labels={trimmedLabels} color={color} />
     </View>
   );
 };
@@ -79,73 +124,49 @@ export const PaceDistributionChart: React.FC<PaceDistributionChartProps> = ({
   zones,
 }) => {
   const data = [
-    {
-      name: 'Recovery',
-      population: zones.zone1,
-      color: '#4ADED0',
-      legendFontColor: '#FFF',
-      legendFontSize: 12,
-    },
-    {
-      name: 'Easy',
-      population: zones.zone2,
-      color: '#52FF30',
-      legendFontColor: '#FFF',
-      legendFontSize: 12,
-    },
-    {
-      name: 'Tempo',
-      population: zones.zone3,
-      color: '#FFD700',
-      legendFontColor: '#FFF',
-      legendFontSize: 12,
-    },
-    {
-      name: 'Threshold',
-      population: zones.zone4,
-      color: '#FF9500',
-      legendFontColor: '#FFF',
-      legendFontSize: 12,
-    },
-    {
-      name: 'VO2 Max',
-      population: zones.zone5,
-      color: '#FF6B35',
-      legendFontColor: '#FFF',
-      legendFontSize: 12,
-    },
-    {
-      name: 'Speed',
-      population: zones.zone6,
-      color: '#FF3B30',
-      legendFontColor: '#FFF',
-      legendFontSize: 12,
-    },
-  ].filter(zone => zone.population > 0); // Only show zones with data
+    { name: 'Recovery', value: zones.zone1, color: '#57B8FF' },
+    { name: 'Easy', value: zones.zone2, color: '#60C676' },
+    { name: 'Tempo', value: zones.zone3, color: '#F7B733' },
+    { name: 'Threshold', value: zones.zone4, color: '#F2A12D' },
+    { name: 'VO2 Max', value: zones.zone5, color: '#FF8B5E' },
+    { name: 'Speed', value: zones.zone6, color: '#FF5F6D' },
+  ].filter(zone => zone.value > 0);
 
-  const chartConfig = {
-    backgroundColor: '#1F1F1D',
-    backgroundGradientFrom: '#1F1F1D',
-    backgroundGradientTo: '#1F1F1D',
-    color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-  };
+  const total = data.reduce((sum, zone) => sum + zone.value, 0);
 
   return (
     <View style={styles.chartContainer}>
       <Text style={styles.chartTitle}>Pace Zone Distribution</Text>
       {data.length > 0 ? (
-        <PieChart
-          data={data}
-          width={screenWidth - 32}
-          height={220}
-          chartConfig={chartConfig}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="15"
-          center={[10, 10]}
-          absolute
-        />
+        <View style={styles.zoneList}>
+          {data.map(zone => {
+            const percentage = total > 0 ? (zone.value / total) * 100 : 0;
+            return (
+              <View key={zone.name} style={styles.zoneRow}>
+                <View style={styles.zoneHeader}>
+                  <View style={styles.zoneNameWrap}>
+                    <View
+                      style={[styles.zoneDot, { backgroundColor: zone.color }]}
+                    />
+                    <Text style={styles.zoneName}>{zone.name}</Text>
+                  </View>
+                  <Text style={styles.zonePercent}>{Math.round(percentage)}%</Text>
+                </View>
+                <View style={styles.zoneTrack}>
+                  <View
+                    style={[
+                      styles.zoneFill,
+                      {
+                        width: `${Math.max(percentage, 6)}%`,
+                        backgroundColor: zone.color,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            );
+          })}
+        </View>
       ) : (
         <View style={styles.noDataContainer}>
           <Text style={styles.noDataText}>No pace data available</Text>
@@ -163,49 +184,18 @@ interface MonthlyVolumeChartProps {
 
 export const MonthlyVolumeChart: React.FC<MonthlyVolumeChartProps> = ({
   distances,
-  durations,
   labels,
 }) => {
-  const chartConfig = {
-    backgroundColor: '#1F1F1D',
-    backgroundGradientFrom: '#1F1F1D',
-    backgroundGradientTo: '#1F1F1D',
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(82, 255, 48, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity * 0.8})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForBars: {
-      radius: 4,
-    },
-    propsForBackgroundLines: {
-      strokeDasharray: '',
-      stroke: 'rgba(255, 255, 255, 0.1)',
-    },
-  };
-
-  const chartData = {
-    labels: labels.slice(-6), // Show last 6 months
-    datasets: [
-      {
-        data: distances.slice(-6),
-        color: (opacity = 1) => `rgba(82, 255, 48, ${opacity})`,
-      },
-    ],
-  };
+  const trimmedData = distances.slice(-6);
+  const trimmedLabels = labels.slice(-6);
 
   return (
     <View style={styles.chartContainer}>
       <Text style={styles.chartTitle}>Monthly Distance (km)</Text>
-      <BarChart
-        data={chartData}
-        width={screenWidth - 32}
-        height={220}
-        chartConfig={chartConfig}
-        style={styles.chart}
-        yAxisSuffix="km"
-        fromZero
+      <SimpleColumnChart
+        values={trimmedData}
+        labels={trimmedLabels}
+        color="#F2A12D"
       />
     </View>
   );
@@ -226,18 +216,18 @@ export const StatCard: React.FC<StatCardProps> = ({
   value,
   subtitle,
   icon,
-  color = '#52FF30',
+  color = '#57B8FF',
   trend,
   trendValue,
 }) => {
   const getTrendColor = () => {
     switch (trend) {
       case 'up':
-        return '#52FF30';
+        return '#60C676';
       case 'down':
-        return '#FF3B30';
+        return '#FF8B5E';
       default:
-        return '#888';
+        return '#8BA0B7';
     }
   };
 
@@ -253,23 +243,23 @@ export const StatCard: React.FC<StatCardProps> = ({
   };
 
   return (
-    <View style={[styles.statCard, { borderColor: color }]}>
+    <View style={[styles.statCard, { borderColor: `${color}55` }]}>
       <View style={styles.statCardHeader}>
-        {icon && <View style={styles.statCardIcon}>{icon}</View>}
+        {icon ? <View style={styles.statCardIcon}>{icon}</View> : null}
         <Text style={styles.statCardTitle}>{title}</Text>
       </View>
 
       <Text style={[styles.statCardValue, { color }]}>{value}</Text>
 
-      {subtitle && <Text style={styles.statCardSubtitle}>{subtitle}</Text>}
+      {subtitle ? <Text style={styles.statCardSubtitle}>{subtitle}</Text> : null}
 
-      {trend && trendValue && (
+      {trend && trendValue ? (
         <View style={styles.trendContainer}>
           <Text style={[styles.trendText, { color: getTrendColor() }]}>
             {getTrendIcon()} {trendValue}
           </Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
 };
@@ -291,11 +281,11 @@ export const PersonalRecordCard: React.FC<PersonalRecordCardProps> = ({
     <View style={[styles.recordCard, isNewRecord && styles.newRecordCard]}>
       <View style={styles.recordHeader}>
         <Text style={styles.recordTitle}>{title}</Text>
-        {isNewRecord && (
+        {isNewRecord ? (
           <View style={styles.newRecordBadge}>
             <Text style={styles.newRecordText}>NEW!</Text>
           </View>
-        )}
+        ) : null}
       </View>
       <Text style={styles.recordValue}>{value}</Text>
       <Text style={styles.recordDate}>{date}</Text>
@@ -304,7 +294,7 @@ export const PersonalRecordCard: React.FC<PersonalRecordCardProps> = ({
 };
 
 interface ProgressRingProps {
-  progress: number; // 0-100
+  progress: number;
   size: number;
   strokeWidth: number;
   color: string;
@@ -317,17 +307,12 @@ export const ProgressRing: React.FC<ProgressRingProps> = ({
   size,
   strokeWidth,
   color,
-  backgroundColor = '#333',
+  backgroundColor = '#E2ECF5',
   children,
 }) => {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
-
   return (
     <View style={[styles.progressRing, { width: size, height: size }]}>
       <View style={styles.progressRingInner}>{children}</View>
-      {/* Background circle */}
       <View style={StyleSheet.absoluteFillObject}>
         <View
           style={{
@@ -339,7 +324,6 @@ export const ProgressRing: React.FC<ProgressRingProps> = ({
           }}
         />
       </View>
-      {/* Progress arc */}
       <View style={StyleSheet.absoluteFillObject}>
         <View
           style={{
@@ -349,6 +333,7 @@ export const ProgressRing: React.FC<ProgressRingProps> = ({
             borderWidth: strokeWidth,
             borderColor: 'transparent',
             borderTopColor: color,
+            opacity: Math.max(progress / 100, 0.24),
             transform: [{ rotate: '-90deg' }],
           }}
         />
@@ -359,20 +344,121 @@ export const ProgressRing: React.FC<ProgressRingProps> = ({
 
 const styles = StyleSheet.create({
   chartContainer: {
-    backgroundColor: '#1F1F1D',
-    borderRadius: 16,
+    backgroundColor: 'rgba(255, 250, 243, 0.96)',
+    borderRadius: 22,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F2E2C3',
   },
   chartTitle: {
-    color: '#fff',
+    color: '#2A4361',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '800',
     marginBottom: 16,
     textAlign: 'center',
   },
-  chart: {
+  chartGrid: {
+    width: CHART_WIDTH,
+    minHeight: CHART_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  columnChartWrap: {
+    alignItems: 'center',
+  },
+  columnSlot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  columnValue: {
+    color: '#7A90A9',
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  columnTrack: {
+    width: '100%',
+    minHeight: 96,
+    height: CHART_HEIGHT * 0.65,
+    justifyContent: 'flex-end',
     borderRadius: 16,
+    backgroundColor: '#F2F7FB',
+    overflow: 'hidden',
+    padding: 4,
+  },
+  columnFill: {
+    width: '100%',
+    borderRadius: 12,
+    minHeight: 10,
+  },
+  columnLabel: {
+    color: '#6B85A3',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  trendBars: {
+    height: 90,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 8,
+  },
+  trendBarSlot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  trendBar: {
+    width: '70%',
+    borderRadius: 999,
+  },
+  zoneList: {
+    gap: 12,
+  },
+  zoneRow: {
+    gap: 8,
+  },
+  zoneHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  zoneNameWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  zoneDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  zoneName: {
+    color: '#2A4361',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  zonePercent: {
+    color: '#7A90A9',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  zoneTrack: {
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: '#EEF3F7',
+    overflow: 'hidden',
+  },
+  zoneFill: {
+    height: '100%',
+    borderRadius: 999,
+    minWidth: 12,
   },
   noDataContainer: {
     height: 220,
@@ -380,16 +466,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   noDataText: {
-    color: '#888',
-    fontSize: 16,
+    color: '#7A90A9',
+    fontSize: 15,
+    fontWeight: '600',
   },
   statCard: {
-    backgroundColor: '#1F1F1D',
-    borderRadius: 16,
+    flex: 1,
+    backgroundColor: 'rgba(255, 250, 243, 0.96)',
+    borderRadius: 22,
     padding: 16,
-    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#333',
   },
   statCardHeader: {
     flexDirection: 'row',
@@ -400,17 +486,18 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statCardTitle: {
-    color: '#888',
-    fontSize: 14,
+    color: '#8096AF',
+    fontSize: 13,
     textTransform: 'uppercase',
+    fontWeight: '700',
   },
   statCardValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 30,
+    fontWeight: '900',
     marginBottom: 4,
   },
   statCardSubtitle: {
-    color: '#aaa',
+    color: '#7A90A9',
     fontSize: 12,
   },
   trendContainer: {
@@ -418,19 +505,19 @@ const styles = StyleSheet.create({
   },
   trendText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   recordCard: {
-    backgroundColor: '#1F1F1D',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 250, 243, 0.96)',
+    borderRadius: 20,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#F2E2C3',
   },
   newRecordCard: {
-    borderColor: '#FFD700',
-    backgroundColor: 'rgba(255, 215, 0, 0.05)',
+    borderColor: '#F7B733',
+    backgroundColor: 'rgba(255, 243, 213, 0.88)',
   },
   recordHeader: {
     flexDirection: 'row',
@@ -439,29 +526,29 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   recordTitle: {
-    color: '#fff',
+    color: '#2A4361',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   newRecordBadge: {
-    backgroundColor: '#FFD700',
+    backgroundColor: '#FFD98C',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   newRecordText: {
-    color: '#000',
+    color: '#7A5010',
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '900',
   },
   recordValue: {
-    color: '#52FF30',
+    color: '#57B8FF',
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '900',
     marginBottom: 4,
   },
   recordDate: {
-    color: '#888',
+    color: '#7A90A9',
     fontSize: 12,
   },
   progressRing: {

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Dimensions,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -8,7 +7,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import GlassPanel from '../components/ui/GlassPanel';
 import {
   MonthlyVolumeChart,
   PaceDistributionChart,
@@ -32,13 +33,7 @@ import {
   formatPace,
 } from '../utils/analyticsCalculations';
 
-const { width: screenWidth } = Dimensions.get('window');
-
-interface AnalyticsScreenProps {
-  navigation: any;
-}
-
-const Analytics: React.FC<AnalyticsScreenProps> = ({ navigation }) => {
+const Analytics: React.FC = () => {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
@@ -62,11 +57,10 @@ const Analytics: React.FC<AnalyticsScreenProps> = ({ navigation }) => {
 
       setAnalytics(analyticsData);
       setActivities(activitiesData);
-      
-      // Calculate achievements
+
       const achievementsData = AchievementService.calculateAchievements(
-        activitiesData, 
-        analyticsData.personalRecords
+        activitiesData,
+        analyticsData.personalRecords,
       );
       setAchievements(achievementsData);
     } catch (error) {
@@ -91,22 +85,24 @@ const Analytics: React.FC<AnalyticsScreenProps> = ({ navigation }) => {
   if (loading || !analytics) {
     return (
       <View style={styles.loadingContainer}>
+        <LinearGradient
+          colors={['#BEE8FF', '#EAF7FF', '#FFF5E3']}
+          style={styles.background}
+        />
         <Text style={styles.loadingText}>Loading analytics...</Text>
       </View>
     );
   }
 
-  // Calculate derived analytics
   const volumeProgression = calculateVolumeProgression(activities, 12);
   const paceZones = calculatePaceZones(activities);
   const consistencyScore = calculateConsistencyScore(activities, 30);
   const avgIntensity =
     activities.length > 0
-      ? activities.reduce((sum, a) => sum + calculateIntensityScore(a), 0) /
+      ? activities.reduce((sum, activity) => sum + calculateIntensityScore(activity), 0) /
         activities.length
       : 0;
 
-  // Calculate trends
   const currentWeekDistance =
     volumeProgression.distances[volumeProgression.distances.length - 1] || 0;
   const previousWeekDistance =
@@ -115,317 +111,353 @@ const Analytics: React.FC<AnalyticsScreenProps> = ({ navigation }) => {
     currentWeekDistance > previousWeekDistance
       ? 'up'
       : currentWeekDistance < previousWeekDistance
-      ? 'down'
-      : 'neutral';
+        ? 'down'
+        : 'neutral';
   const distanceTrendValue =
     previousWeekDistance > 0
       ? `${Math.abs(
-          ((currentWeekDistance - previousWeekDistance) /
-            previousWeekDistance) *
-            100,
+          ((currentWeekDistance - previousWeekDistance) / previousWeekDistance) * 100,
         ).toFixed(0)}%`
       : '';
 
-  const renderTimeframeSelector = () => (
-    <View style={styles.timeframeSelector}>
-      {(['week', 'month', 'year'] as const).map(timeframe => (
-        <TouchableOpacity
-          key={timeframe}
-          style={[
-            styles.timeframeButton,
-            selectedTimeframe === timeframe && styles.timeframeButtonActive,
-          ]}
-          onPress={() => setSelectedTimeframe(timeframe)}
-        >
-          <Text
-            style={[
-              styles.timeframeButtonText,
-              selectedTimeframe === timeframe &&
-                styles.timeframeButtonTextActive,
-            ]}
-          >
-            {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  const renderOverviewStats = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        <Text style={styles.sectionTitleBold}>Your</Text> Overview
-      </Text>
-
-      <View style={styles.statsGrid}>
-        <View style={styles.statsRow}>
-          <StatCard
-            title="Total Distance"
-            value={formatDistance(analytics.totalDistance)}
-            subtitle="kilometers"
-            icon={<Ionicons name="footsteps" size={20} color="#52FF30" />}
-            trend={distanceTrend}
-            trendValue={distanceTrendValue}
-          />
-          <StatCard
-            title="Activities"
-            value={analytics.totalActivities.toString()}
-            subtitle="completed"
-            icon={<Ionicons name="trophy" size={20} color="#FFD700" />}
-          />
-        </View>
-
-        <View style={styles.statsRow}>
-          <StatCard
-            title="Total Time"
-            value={formatDuration(analytics.totalDuration)}
-            subtitle="hours running"
-            icon={<Ionicons name="time" size={20} color="#FF9500" />}
-          />
-          <StatCard
-            title="Avg Pace"
-            value={formatPace(analytics.avgPace)}
-            subtitle="per kilometer"
-            icon={<Ionicons name="speedometer" size={20} color="#4ADED0" />}
-          />
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderProgressRings = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        <Text style={styles.sectionTitleBold}>Progress</Text> Rings
-      </Text>
-
-      <View style={styles.progressRingsContainer}>
-        <View style={styles.progressRingItem}>
-          <ProgressRing
-            progress={consistencyScore}
-            size={120}
-            strokeWidth={8}
-            color="#52FF30"
-          >
-            <View style={styles.progressRingContent}>
-              <Text style={styles.progressRingValue}>{consistencyScore}%</Text>
-              <Text style={styles.progressRingLabel}>Consistency</Text>
-            </View>
-          </ProgressRing>
-        </View>
-
-        <View style={styles.progressRingItem}>
-          <ProgressRing
-            progress={avgIntensity}
-            size={120}
-            strokeWidth={8}
-            color="#FF9500"
-          >
-            <View style={styles.progressRingContent}>
-              <Text style={styles.progressRingValue}>
-                {Math.round(avgIntensity)}%
-              </Text>
-              <Text style={styles.progressRingLabel}>Intensity</Text>
-            </View>
-          </ProgressRing>
-        </View>
-
-        <View style={styles.progressRingItem}>
-          <ProgressRing
-            progress={Math.min(100, (currentWeekDistance / 10) * 100)} // 10km weekly goal
-            size={120}
-            strokeWidth={8}
-            color="#4ADED0"
-          >
-            <View style={styles.progressRingContent}>
-              <Text style={styles.progressRingValue}>
-                {formatDistance(currentWeekDistance, 1)}
-              </Text>
-              <Text style={styles.progressRingLabel}>This Week</Text>
-            </View>
-          </ProgressRing>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderPersonalRecords = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        <Text style={styles.sectionTitleBold}>Personal</Text> Records
-      </Text>
-
-      {analytics.personalRecords.length > 0 ? (
-        <View style={styles.recordsGrid}>
-          {analytics.personalRecords.slice(0, 6).map(record => (
-            <PersonalRecordCard
-              key={record.id}
-              title={formatRecordType(record.recordType)}
-              value={formatRecordValue(record.recordType, record.value)}
-              date={new Date(record.achievedAt).toLocaleDateString()}
-              isNewRecord={
-                Date.now() - record.achievedAt < 7 * 24 * 60 * 60 * 1000
-              } // New if within 7 days
-            />
-          ))}
-        </View>
-      ) : (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>
-            Complete activities to set personal records!
-          </Text>
-        </View>
-      )}
-    </View>
-  );
-
-  const renderAchievements = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        <Text style={styles.sectionTitleBold}>Achievements</Text>
-      </Text>
-      
-      {achievements.length > 0 ? (
-        <View style={styles.achievementsContainer}>
-          {achievements.slice(0, 6).map(achievement => (
-            <TouchableOpacity
-              key={achievement.id}
-              style={[
-                styles.achievementCard,
-                achievement.isUnlocked && styles.achievementCardUnlocked
-              ]}
-            >
-              <View style={styles.achievementIconContainer}>
-                <Ionicons
-                  name={achievement.icon as any}
-                  size={24}
-                  color={
-                    achievement.isUnlocked 
-                      ? AchievementService.getTierColor(achievement.tier)
-                      : '#555'
-                  }
-                />
-              </View>
-              
-              <View style={styles.achievementInfo}>
-                <Text style={[
-                  styles.achievementTitle,
-                  achievement.isUnlocked && styles.achievementTitleUnlocked
-                ]}>
-                  {achievement.title}
-                </Text>
-                <Text style={styles.achievementDescription}>
-                  {achievement.description}
-                </Text>
-                
-                {!achievement.isUnlocked && (
-                  <View style={styles.achievementProgress}>
-                    <View style={styles.achievementProgressBar}>
-                      <View
-                        style={[
-                          styles.achievementProgressFill,
-                          { width: `${achievement.progress * 100}%` }
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.achievementProgressText}>
-                      {Math.round(achievement.progress * 100)}%
-                    </Text>
-                  </View>
-                )}
-                
-                {achievement.isUnlocked && achievement.unlockedAt && (
-                  <Text style={styles.achievementUnlockedDate}>
-                    Unlocked {new Date(achievement.unlockedAt).toLocaleDateString()}
-                  </Text>
-                )}
-              </View>
-              
-              {achievement.isUnlocked && (
-                <View style={styles.achievementBadge}>
-                  <Ionicons name="checkmark" size={16} color="#000" />
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
-          
-          <TouchableOpacity style={styles.viewMoreButton}>
-            <Text style={styles.viewMoreText}>
-              View All {achievements.length} Achievements
-            </Text>
-            <Ionicons name="arrow-forward" size={16} color="#52FF30" />
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>
-            Complete activities to unlock achievements!
-          </Text>
-        </View>
-      )}
-    </View>
-  );
-
-  const renderCharts = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        <Text style={styles.sectionTitleBold}>Performance</Text> Charts
-      </Text>
-
-      <WeeklyProgressChart
-        data={volumeProgression.distances}
-        labels={volumeProgression.labels}
-        title="Weekly Distance Progress"
-      />
-
-      <MonthlyVolumeChart
-        distances={analytics.monthlyDistance}
-        durations={volumeProgression.durations}
-        labels={['6mo', '5mo', '4mo', '3mo', '2mo', '1mo']}
-      />
-
-      <PaceDistributionChart zones={paceZones} />
-    </View>
-  );
-
   return (
     <View style={styles.container}>
+      <LinearGradient
+        colors={['#BEE8FF', '#EAF7FF', '#FFF5E3']}
+        style={styles.background}
+      />
+      <View style={styles.cloudTop} />
+      <View style={styles.cloudBottom} />
+
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#52FF30']}
-            tintColor="#52FF30"
-            progressBackgroundColor="#1F1F1D"
+            colors={['#57B8FF']}
+            tintColor="#57B8FF"
+            progressBackgroundColor="#FFF8EE"
           />
         }
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Analytics</Text>
-          <TouchableOpacity style={styles.syncButton} onPress={onRefresh}>
-            <Ionicons name="sync" size={24} color="#52FF30" />
-          </TouchableOpacity>
+        <GlassPanel
+          style={styles.heroShell}
+          accentColors={['rgba(255, 208, 122, 0.7)', 'rgba(143, 221, 255, 0.55)']}
+        >
+          <LinearGradient
+            colors={['#FFF8EE', '#FFF1DA']}
+            style={styles.heroCard}
+          >
+            <View style={styles.heroTop}>
+              <View>
+                <Text style={styles.heroEyebrow}>Performance Lab</Text>
+                <Text style={styles.heroTitle}>Run analytics</Text>
+                <Text style={styles.heroSubtitle}>
+                  Track streak quality, pace balance, and how your Mumbai loops are
+                  evolving each week.
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.syncButton} onPress={onRefresh}>
+                <Ionicons name="sync-outline" size={22} color="#0D4D7A" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.heroStatsRow}>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>
+                  {formatDistance(analytics.totalDistance)}
+                </Text>
+                <Text style={styles.heroStatLabel}>Total km</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>{analytics.totalActivities}</Text>
+                <Text style={styles.heroStatLabel}>Activities</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>{Math.round(consistencyScore)}%</Text>
+                <Text style={styles.heroStatLabel}>Consistency</Text>
+              </View>
+            </View>
+          </LinearGradient>
+        </GlassPanel>
+
+        <View style={styles.timeframeSelector}>
+          {(['week', 'month', 'year'] as const).map(timeframe => (
+            <TouchableOpacity
+              key={timeframe}
+              style={[
+                styles.timeframeButton,
+                selectedTimeframe === timeframe && styles.timeframeButtonActive,
+              ]}
+              onPress={() => setSelectedTimeframe(timeframe)}
+            >
+              <Text
+                style={[
+                  styles.timeframeButtonText,
+                  selectedTimeframe === timeframe && styles.timeframeButtonTextActive,
+                ]}
+              >
+                {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {renderTimeframeSelector()}
-        {renderOverviewStats()}
-        {renderProgressRings()}
-        {renderPersonalRecords()}
-        {renderAchievements()}
-        {renderCharts()}
+        <View style={styles.section}>
+          <Text style={styles.sectionEyebrow}>Overview</Text>
+          <Text style={styles.sectionTitle}>Your command summary</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statsRow}>
+              <StatCard
+                title="Total Distance"
+                value={formatDistance(analytics.totalDistance)}
+                subtitle="kilometers"
+                icon={<Ionicons name="footsteps-outline" size={20} color="#57B8FF" />}
+                color="#57B8FF"
+                trend={distanceTrend}
+                trendValue={distanceTrendValue}
+              />
+              <StatCard
+                title="Activities"
+                value={analytics.totalActivities.toString()}
+                subtitle="completed"
+                icon={<Ionicons name="trophy-outline" size={20} color="#F2A12D" />}
+                color="#F2A12D"
+              />
+            </View>
 
-        {/* Bottom spacing */}
-        <View style={{ height: 100 }} />
+            <View style={styles.statsRow}>
+              <StatCard
+                title="Total Time"
+                value={formatDuration(analytics.totalDuration)}
+                subtitle="hours running"
+                icon={<Ionicons name="time-outline" size={20} color="#FF8B5E" />}
+                color="#FF8B5E"
+              />
+              <StatCard
+                title="Avg Pace"
+                value={formatPace(analytics.avgPace)}
+                subtitle="per kilometer"
+                icon={<Ionicons name="speedometer-outline" size={20} color="#60C676" />}
+                color="#60C676"
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionEyebrow}>Progress</Text>
+          <Text style={styles.sectionTitle}>Rings at a glance</Text>
+          <GlassPanel style={styles.progressShell}>
+            <View style={styles.progressCard}>
+              <View style={styles.progressRingsContainer}>
+                <View style={styles.progressRingItem}>
+                  <ProgressRing
+                    progress={consistencyScore}
+                    size={116}
+                    strokeWidth={8}
+                    color="#57B8FF"
+                    backgroundColor="#E5EFF7"
+                  >
+                    <View style={styles.progressRingContent}>
+                      <Text style={styles.progressRingValue}>{consistencyScore}%</Text>
+                      <Text style={styles.progressRingLabel}>Consistency</Text>
+                    </View>
+                  </ProgressRing>
+                </View>
+
+                <View style={styles.progressRingItem}>
+                  <ProgressRing
+                    progress={avgIntensity}
+                    size={116}
+                    strokeWidth={8}
+                    color="#FF8B5E"
+                    backgroundColor="#E5EFF7"
+                  >
+                    <View style={styles.progressRingContent}>
+                      <Text style={styles.progressRingValue}>
+                        {Math.round(avgIntensity)}%
+                      </Text>
+                      <Text style={styles.progressRingLabel}>Intensity</Text>
+                    </View>
+                  </ProgressRing>
+                </View>
+
+                <View style={styles.progressRingItem}>
+                  <ProgressRing
+                    progress={Math.min(100, (currentWeekDistance / 10) * 100)}
+                    size={116}
+                    strokeWidth={8}
+                    color="#F2A12D"
+                    backgroundColor="#E5EFF7"
+                  >
+                    <View style={styles.progressRingContent}>
+                      <Text style={styles.progressRingValue}>
+                        {formatDistance(currentWeekDistance, 1)}
+                      </Text>
+                      <Text style={styles.progressRingLabel}>This Week</Text>
+                    </View>
+                  </ProgressRing>
+                </View>
+              </View>
+            </View>
+          </GlassPanel>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionEyebrow}>Records</Text>
+          <Text style={styles.sectionTitle}>Personal bests</Text>
+          {analytics.personalRecords.length > 0 ? (
+            <View style={styles.recordsGrid}>
+              {analytics.personalRecords.slice(0, 6).map(record => (
+                <PersonalRecordCard
+                  key={record.id}
+                  title={formatRecordType(record.recordType)}
+                  value={formatRecordValue(record.recordType, record.value)}
+                  date={new Date(record.achievedAt).toLocaleDateString()}
+                  isNewRecord={
+                    Date.now() - record.achievedAt < 7 * 24 * 60 * 60 * 1000
+                  }
+                />
+              ))}
+            </View>
+          ) : (
+            <GlassPanel style={styles.emptyShell}>
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>
+                  Complete activities to set personal records.
+                </Text>
+              </View>
+            </GlassPanel>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionEyebrow}>Milestones</Text>
+          <Text style={styles.sectionTitle}>Achievements</Text>
+
+          {achievements.length > 0 ? (
+            <View style={styles.achievementsContainer}>
+              {achievements.slice(0, 6).map(achievement => (
+                <GlassPanel
+                  key={achievement.id}
+                  style={styles.achievementShell}
+                  accentColors={[
+                    achievement.isUnlocked
+                      ? `${AchievementService.getTierColor(achievement.tier)}55`
+                      : 'rgba(190, 205, 220, 0.55)',
+                    'rgba(255,255,255,0.78)',
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={styles.achievementCard}
+                    activeOpacity={0.86}
+                  >
+                    <View style={styles.achievementIconContainer}>
+                      <Ionicons
+                        name={achievement.icon as any}
+                        size={24}
+                        color={
+                          achievement.isUnlocked
+                            ? AchievementService.getTierColor(achievement.tier)
+                            : '#9AA8B8'
+                        }
+                      />
+                    </View>
+
+                    <View style={styles.achievementInfo}>
+                      <Text
+                        style={[
+                          styles.achievementTitle,
+                          achievement.isUnlocked && styles.achievementTitleUnlocked,
+                        ]}
+                      >
+                        {achievement.title}
+                      </Text>
+                      <Text style={styles.achievementDescription}>
+                        {achievement.description}
+                      </Text>
+
+                      {!achievement.isUnlocked && (
+                        <View style={styles.achievementProgress}>
+                          <View style={styles.achievementProgressBar}>
+                            <View
+                              style={[
+                                styles.achievementProgressFill,
+                                { width: `${achievement.progress * 100}%` },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.achievementProgressText}>
+                            {Math.round(achievement.progress * 100)}%
+                          </Text>
+                        </View>
+                      )}
+
+                      {achievement.isUnlocked && achievement.unlockedAt && (
+                        <Text style={styles.achievementUnlockedDate}>
+                          Unlocked{' '}
+                          {new Date(achievement.unlockedAt).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </View>
+
+                    {achievement.isUnlocked && (
+                      <View style={styles.achievementBadge}>
+                        <Ionicons name="checkmark" size={16} color="#7A5010" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </GlassPanel>
+              ))}
+
+              <TouchableOpacity style={styles.viewMoreButton}>
+                <Text style={styles.viewMoreText}>
+                  View All {achievements.length} Achievements
+                </Text>
+                <Ionicons name="arrow-forward" size={16} color="#0D4D7A" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <GlassPanel style={styles.emptyShell}>
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>
+                  Complete activities to unlock achievements.
+                </Text>
+              </View>
+            </GlassPanel>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionEyebrow}>Charts</Text>
+          <Text style={styles.sectionTitle}>Performance trends</Text>
+
+          <WeeklyProgressChart
+            data={volumeProgression.distances}
+            labels={volumeProgression.labels}
+            title="Weekly Distance Progress"
+            color="#57B8FF"
+          />
+
+          <MonthlyVolumeChart
+            distances={analytics.monthlyDistance}
+            durations={volumeProgression.durations}
+            labels={['6mo', '5mo', '4mo', '3mo', '2mo', '1mo']}
+          />
+
+          <PaceDistributionChart zones={paceZones} />
+        </View>
+
+        <View style={styles.bottomSpacing} />
       </ScrollView>
     </View>
   );
 };
 
-// Helper functions
 const formatRecordType = (type: string): string => {
   const typeMap: { [key: string]: string } = {
     fastest_1k: 'Fastest 1K',
@@ -442,14 +474,18 @@ const formatRecordType = (type: string): string => {
 const formatRecordValue = (type: string, value: number): string => {
   if (type.includes('fastest') && type !== 'fastest_pace') {
     return formatDuration(value);
-  } else if (type === 'fastest_pace') {
+  }
+  if (type === 'fastest_pace') {
     return formatPace(value);
-  } else if (type === 'longest_distance') {
-    return formatDistance(value) + ' km';
-  } else if (type === 'longest_duration') {
+  }
+  if (type === 'longest_distance') {
+    return `${formatDistance(value)} km`;
+  }
+  if (type === 'longest_duration') {
     return formatDuration(value);
-  } else if (type === 'most_calories') {
-    return value.toFixed(0) + ' kcal';
+  }
+  if (type === 'most_calories') {
+    return `${value.toFixed(0)} kcal`;
   }
   return value.toString();
 };
@@ -457,83 +493,153 @@ const formatRecordValue = (type: string, value: number): string => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#141412',
+    backgroundColor: '#EAF7FF',
+  },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cloudTop: {
+    position: 'absolute',
+    top: 24,
+    right: -32,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  cloudBottom: {
+    position: 'absolute',
+    bottom: 120,
+    left: -40,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.24)',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#141412',
+    backgroundColor: '#EAF7FF',
   },
   loadingText: {
-    color: '#888',
+    color: '#6F89A6',
     fontSize: 16,
+    fontWeight: '700',
   },
   scrollView: {
     flex: 1,
   },
-  header: {
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 28,
+  },
+  heroShell: {
+    marginBottom: 16,
+  },
+  heroCard: {
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+  },
+  heroTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 10,
+    gap: 12,
   },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: 'bold',
-    fontStyle: 'italic',
+  heroEyebrow: {
+    color: '#D58A15',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  heroTitle: {
+    color: '#2A4361',
+    fontSize: 31,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  heroSubtitle: {
+    color: '#728CAA',
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 8,
+    maxWidth: '88%',
   },
   syncButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1F1F1D',
-    justifyContent: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: 20,
+    backgroundColor: '#AEE4FF',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#52FF30',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  heroStat: {
+    flex: 1,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.74)',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  heroStatValue: {
+    color: '#223B57',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  heroStatLabel: {
+    color: '#768FAD',
+    fontSize: 12,
+    marginTop: 3,
   },
   timeframeSelector: {
     flexDirection: 'row',
-    marginHorizontal: 16,
     marginBottom: 20,
-    backgroundColor: '#1F1F1D',
-    borderRadius: 12,
-    padding: 4,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderRadius: 18,
+    padding: 5,
+    borderWidth: 1,
+    borderColor: '#DCEAF5',
   },
   timeframeButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 14,
     alignItems: 'center',
   },
   timeframeButtonActive: {
-    backgroundColor: '#52FF30',
+    backgroundColor: '#FFD98C',
   },
   timeframeButtonText: {
-    color: '#888',
+    color: '#7D93AC',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   timeframeButtonTextActive: {
-    color: '#000',
+    color: '#7A5010',
   },
   section: {
     marginBottom: 24,
-    paddingHorizontal: 16,
+  },
+  sectionEyebrow: {
+    color: '#D58A15',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
   sectionTitle: {
-    color: '#888',
-    fontSize: 24,
-    marginBottom: 16,
-  },
-  sectionTitleBold: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontStyle: 'italic',
+    color: '#2A4361',
+    fontSize: 26,
+    fontWeight: '900',
+    marginBottom: 14,
   },
   statsGrid: {
     gap: 12,
@@ -542,11 +648,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  progressShell: {
+    marginTop: 2,
+  },
+  progressCard: {
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+  },
   progressRingsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 8,
   },
   progressRingItem: {
     alignItems: 'center',
@@ -555,51 +668,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressRingValue: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#28435F',
+    fontSize: 16,
+    fontWeight: '900',
   },
   progressRingLabel: {
-    color: '#888',
-    fontSize: 12,
+    color: '#748CA8',
+    fontSize: 11,
     textAlign: 'center',
+    marginTop: 2,
   },
   recordsGrid: {
     gap: 12,
   },
+  emptyShell: {
+    marginTop: 2,
+  },
   emptyState: {
-    backgroundColor: '#1F1F1D',
-    borderRadius: 16,
-    padding: 32,
+    padding: 26,
     alignItems: 'center',
   },
   emptyStateText: {
-    color: '#888',
-    fontSize: 16,
+    color: '#748CA8',
+    fontSize: 15,
     textAlign: 'center',
+    lineHeight: 22,
   },
   achievementsContainer: {
     gap: 12,
   },
+  achievementShell: {
+    marginBottom: 0,
+  },
   achievementCard: {
-    backgroundColor: '#1F1F1D',
-    borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
-    opacity: 0.6,
-  },
-  achievementCardUnlocked: {
-    opacity: 1,
-    borderColor: '#52FF30',
   },
   achievementIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#252525',
+    backgroundColor: '#F4F9FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -608,18 +718,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   achievementTitle: {
-    color: '#888',
+    color: '#90A1B5',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 4,
   },
   achievementTitleUnlocked: {
-    color: '#fff',
+    color: '#2A4361',
   },
   achievementDescription: {
-    color: '#666',
+    color: '#7A90A9',
     fontSize: 12,
     marginBottom: 8,
+    lineHeight: 18,
   },
   achievementProgress: {
     flexDirection: 'row',
@@ -628,29 +739,29 @@ const styles = StyleSheet.create({
   },
   achievementProgressBar: {
     flex: 1,
-    height: 4,
-    backgroundColor: '#333',
-    borderRadius: 2,
+    height: 5,
+    backgroundColor: '#E7EEF6',
+    borderRadius: 999,
   },
   achievementProgressFill: {
     height: '100%',
-    backgroundColor: '#52FF30',
-    borderRadius: 2,
+    backgroundColor: '#57B8FF',
+    borderRadius: 999,
   },
   achievementProgressText: {
-    color: '#888',
+    color: '#8096AE',
     fontSize: 10,
     minWidth: 30,
   },
   achievementUnlockedDate: {
-    color: '#666',
+    color: '#8096AE',
     fontSize: 10,
   },
   achievementBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#52FF30',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFD98C',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -658,17 +769,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#252525',
-    paddingVertical: 12,
+    backgroundColor: '#F4FAFF',
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 18,
     gap: 8,
-    marginTop: 8,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#DCEAF5',
   },
   viewMoreText: {
-    color: '#52FF30',
+    color: '#0D4D7A',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
+  },
+  bottomSpacing: {
+    height: 100,
   },
 });
 

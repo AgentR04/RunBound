@@ -1,6 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
   Platform,
   StatusBar,
   StyleSheet,
@@ -16,11 +18,16 @@ import MapView, {
 } from 'react-native-maps';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { ActiveRun as ActiveRunType, Territory } from '../types/game';
+import { upsertUserProfile } from '../services/api';
+import {
+  emitRunEnded,
+  emitRunLocation,
+  emitRunStarted,
+} from '../services/socket';
+import { updateLocalUserRewards } from '../utils/storage';
 import {
   calculateCalories,
-  calculatePace,
   calculatePathDistance,
-  calculateSpeed,
   LocationPoint,
 } from '../utils/gpsTracking';
 import {
@@ -29,6 +36,15 @@ import {
   isNearStartPoint,
   simplifyPolygon,
 } from '../utils/territoryUtils';
+
+const DropMarker = require('../src/components/run/DropMarker').default;
+const DropsHUD = require('../src/components/run/DropsHUD').default;
+const {
+  advancePathRewards,
+  getPathRewardHudState,
+  hydratePathRewardState,
+  syncTimedPathRewardState,
+} = require('../src/engines/DropEngine');
 
 const HEADER_FONT = Platform.select({
   ios: 'AvenirNextCondensed-Heavy',
@@ -77,19 +93,26 @@ const TACTICAL_MAP_STYLE = [
   },
 ];
 
-interface ActiveRunScreenProps {
-  navigation: any;
-  route: {
-    params: {
-      initialActiveRun: ActiveRunType;
-      targetTerritory?: Territory | null;
-      onPause: () => void;
-      onResume: () => void;
-      onStop: () => void;
-      onClaim: () => void;
-      onRunUpdate: (run: ActiveRunType) => void;
-    };
+interface ActiveRunRouteParams {
+  initialActiveRun: ActiveRunType;
+  targetTerritory?: Territory | null;
+  runnerProfile: {
+    id: string;
+    username: string;
+    color?: string;
   };
+  onPause: () => void;
+  onResume: () => void;
+  onStop: () => void;
+  onClaim: () => void;
+  onRunUpdate: (run: ActiveRunType) => void;
+}
+
+interface PickupEffect {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
 }
 
 function hashString(input: string) {
@@ -156,32 +179,243 @@ function formatTime(seconds: number): string {
     .padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
-const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
-  navigation,
-  route,
-}) => {
+function estimateSteps(distanceKm: number): number {
+  return Math.max(0, Math.round(distanceKm * 1312));
+}
+
+function FloatingRewardText({ effect }: { effect: PickupEffect }) {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(progress, {
+      duration: 900,
+      easing: Easing.out(Easing.quad),
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [progress]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.floatingReward,
+        {
+          left: effect.x,
+          top: effect.y,
+          opacity: progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [1, 0],
+          }),
+          transform: [
+            {
+              translateY: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, -34],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <Text style={styles.floatingRewardText}>{effect.label}</Text>
+    </Animated.View>
+  );
+}
+
+const ActiveRunScreen = ({ navigation, route }: any) => {
   const {
     initialActiveRun,
     targetTerritory,
+    runnerProfile,
     onPause,
     onResume,
     onStop,
     onClaim,
     onRunUpdate,
-  } = route.params;
-  const [activeRun, setActiveRun] = useState(initialActiveRun);
+  } = route.params as ActiveRunRouteParams;
+  const hydratedInitialRun = hydratePathRewardState(initialActiveRun);
+  const [activeRun, setActiveRun] = useState<ActiveRunType>(hydratedInitialRun);
+  const activeRunRef = useRef<ActiveRunType>(hydratedInitialRun);
   const [timer, setTimer] = useState(0);
+  const [pickupEffects, setPickupEffects] = useState<PickupEffect[]>([]);
+  const [ghostBannerVisible, setGhostBannerVisible] = useState(false);
+  const [hudFlashKey, setHudFlashKey] = useState(0);
+  const [isDrawerCollapsed, setIsDrawerCollapsed] = useState(true);
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const mapRef = useRef<MapView>(null);
+  const ghostBannerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickupTimeouts = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const didEmitRunStart = useRef(false);
+  const ghostBannerOpacity = useRef(new Animated.Value(0)).current;
+
+  const commitActiveRun = useCallback((nextRun: ActiveRunType) => {
+    activeRunRef.current = nextRun;
+    setActiveRun(nextRun);
+  }, []);
+
+  const removePickupEffect = (effectId: string) => {
+    setPickupEffects(previous =>
+      previous.filter(effect => effect.id !== effectId),
+    );
+  };
+
+  const showPickupEffect = useCallback(async (
+    effectId: string,
+    label: string,
+    latitude: number,
+    longitude: number,
+  ) => {
+    try {
+      const point = await mapRef.current?.pointForCoordinate({
+        latitude,
+        longitude,
+      });
+
+      if (!point) {
+        return;
+      }
+
+      setPickupEffects(previous => [
+        ...previous,
+        {
+          id: effectId,
+          label,
+          x: point.x - 48,
+          y: point.y - 32,
+        },
+      ]);
+
+      const timeout = setTimeout(() => removePickupEffect(effectId), 1025);
+      pickupTimeouts.current.push(timeout);
+    } catch (error) {
+      console.warn('[drops] pickup effect failed:', error);
+    }
+  }, []);
+
+  const persistUserRewardUpdate = useCallback(async (
+    rewardDelta: {
+      coinsDelta?: number;
+      shieldDelta?: number;
+      shieldExpiresAt?: number | null;
+    },
+  ) => {
+    const hasProfileDelta =
+      !!rewardDelta.coinsDelta ||
+      !!rewardDelta.shieldDelta ||
+      rewardDelta.shieldExpiresAt !== undefined;
+
+    if (!hasProfileDelta) {
+      return;
+    }
+
+    try {
+      const updatedUser = await updateLocalUserRewards(runnerProfile, rewardDelta);
+
+      await upsertUserProfile({
+        id: runnerProfile.id,
+        username: runnerProfile.username,
+        color: runnerProfile.color,
+        coins: updatedUser.coins,
+        shieldCharges: updatedUser.shieldCharges,
+        shieldActive: updatedUser.shieldActive,
+        shieldExpiresAt: updatedUser.shieldExpiresAt
+          ? new Date(updatedUser.shieldExpiresAt).toISOString()
+          : null,
+      });
+    } catch (error) {
+      console.warn('[drops] reward sync failed:', error);
+    }
+  }, [runnerProfile]);
+
+  const handleRewardEvents = useCallback((events: Array<any>) => {
+    events.forEach(event => {
+      if (event.type === 'collected') {
+        const { drop, collectedDrop, rewardDelta } = event;
+
+        showPickupEffect(
+          collectedDrop.id,
+          collectedDrop.rewardText,
+          drop.coordinate.latitude,
+          drop.coordinate.longitude,
+        ).catch(error => console.warn('[drops] pickup effect failed:', error));
+
+        if (drop.type === 'ghost_mode') {
+          setGhostBannerVisible(true);
+          ghostBannerOpacity.setValue(0);
+          Animated.timing(ghostBannerOpacity, {
+            toValue: 1,
+            duration: 220,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }).start();
+          if (ghostBannerTimeout.current) {
+            clearTimeout(ghostBannerTimeout.current);
+          }
+          ghostBannerTimeout.current = setTimeout(() => {
+            Animated.timing(ghostBannerOpacity, {
+              toValue: 0,
+              duration: 260,
+              easing: Easing.inOut(Easing.quad),
+              useNativeDriver: true,
+            }).start(({ finished }) => {
+              if (finished) {
+                setGhostBannerVisible(false);
+              }
+            });
+          }, 3000);
+        }
+
+        persistUserRewardUpdate(rewardDelta).catch(error =>
+          console.warn('[drops] reward sync failed:', error),
+        );
+      }
+
+      if (event.type === 'multiplier_expired') {
+        setHudFlashKey(previous => previous + 1);
+      }
+    });
+  }, [ghostBannerOpacity, persistUserRewardUpdate, showPickupEffect]);
 
   useEffect(() => {
     onRunUpdate(activeRun);
   }, [activeRun, onRunUpdate]);
 
   useEffect(() => {
-    if (activeRun.state === 'running') {
+    const startLocation = activeRun.path[0];
+
+    if (!startLocation || activeRun.state !== 'running' || didEmitRunStart.current) {
+      return;
+    }
+
+    didEmitRunStart.current = true;
+    emitRunStarted({
+      userId: runnerProfile.id,
+      location: {
+        latitude: startLocation.latitude,
+        longitude: startLocation.longitude,
+      },
+      ghostUntil: activeRun.ghostUntil,
+    });
+  }, [activeRun.ghostUntil, activeRun.path, activeRun.state, runnerProfile.id]);
+
+  useEffect(() => {
+    if (activeRun.state === 'running' || activeRun.state === 'paused') {
       timerInterval.current = setInterval(() => {
-        setTimer(previous => previous + 1);
+        if (activeRunRef.current.state === 'running') {
+          setTimer(previous => previous + 1);
+        }
+
+        const { run: nextRun, events } = syncTimedPathRewardState(
+          activeRunRef.current,
+          Date.now(),
+        );
+
+        commitActiveRun(nextRun);
+
+        if (events.length > 0) {
+          handleRewardEvents(events);
+        }
       }, 1000);
     } else if (timerInterval.current) {
       clearInterval(timerInterval.current);
@@ -193,8 +427,14 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
         clearInterval(timerInterval.current);
         timerInterval.current = null;
       }
+      if (ghostBannerTimeout.current) {
+        clearTimeout(ghostBannerTimeout.current);
+        ghostBannerTimeout.current = null;
+      }
+      pickupTimeouts.current.forEach(timeout => clearTimeout(timeout));
+      pickupTimeouts.current = [];
     };
-  }, [activeRun.state]);
+  }, [activeRun.state, commitActiveRun, handleRewardEvents]);
 
   useEffect(() => {
     const currentLocation = activeRun.path[activeRun.path.length - 1];
@@ -211,14 +451,55 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
     }
   }, [activeRun.path, activeRun.state]);
 
+  const handleLocationUpdate = (event: any) => {
+    const { coordinate } = event.nativeEvent;
+    const currentRun = activeRunRef.current;
+
+    if (!coordinate || currentRun.state !== 'running') {
+      return;
+    }
+
+    const location: LocationPoint = {
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+      timestamp: Date.now(),
+      accuracy: coordinate.accuracy,
+      altitude: coordinate.altitude ?? undefined,
+      speed: coordinate.speed ?? undefined,
+    };
+    const previousLocation = currentRun.path[currentRun.path.length - 1];
+    const nextPath = [...currentRun.path, location];
+    const nextDistance = calculatePathDistance(nextPath);
+    const nearLoop =
+      currentRun.path.length > 10 &&
+      isNearStartPoint(location, currentRun.path[0]);
+    const baseRun = {
+      ...currentRun,
+      path: nextPath,
+      distance: nextDistance,
+      isNearStart: nearLoop,
+    };
+    const { run: rewardRun, events } = advancePathRewards(
+      baseRun,
+      previousLocation,
+      location,
+      Date.now(),
+    );
+
+    commitActiveRun(rewardRun);
+    emitRunLocation({
+      userId: runnerProfile.id,
+      location: {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      },
+      ghostUntil: rewardRun.ghostUntil,
+    });
+    handleRewardEvents(events);
+  };
+
   const distance = activeRun.distance;
-  const minimumDistance = 0.005;
-  const pace =
-    distance > minimumDistance ? calculatePace(distance, timer) : '0\'00"';
-  const speed =
-    distance > minimumDistance
-      ? calculateSpeed(distance, timer).toFixed(1)
-      : '0.0';
+  const steps = estimateSteps(distance);
   const calories = calculateCalories(distance);
   const currentLocation = activeRun.path[activeRun.path.length - 1];
   const isNearStart =
@@ -238,15 +519,20 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
   const progressRatio = Math.min(distance / 1, 1);
   const progressPercent = Math.round(progressRatio * 100);
   const targetName = getTerritoryName(targetTerritory);
-  const signal = getSignalState(speed, currentLocation);
+  const signal = getSignalState('0.0', currentLocation);
+  const rewardHud = getPathRewardHudState(activeRun, Date.now());
+  const hasGhostMode = rewardHud.ghostActive;
+  const projectedXp = Math.round(
+    distance * 90 * (rewardHud.multiplierValue ?? 1),
+  );
 
   const handlePause = () => {
-    setActiveRun(previous => ({ ...previous, state: 'paused' }));
+    commitActiveRun({ ...activeRunRef.current, state: 'paused' });
     onPause();
   };
 
   const handleResume = () => {
-    setActiveRun(previous => ({ ...previous, state: 'running' }));
+    commitActiveRun({ ...activeRunRef.current, state: 'running' });
     onResume();
   };
 
@@ -260,6 +546,7 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
           text: 'End Run',
           style: 'destructive',
           onPress: () => {
+            emitRunEnded({ userId: runnerProfile.id });
             onStop();
             navigation.goBack();
           },
@@ -286,6 +573,7 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
     }
 
     onClaim();
+    emitRunEnded({ userId: runnerProfile.id });
     navigation.goBack();
   };
 
@@ -309,36 +597,7 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
         showsUserLocation
         showsMyLocationButton={false}
         followsUserLocation={activeRun.state === 'running'}
-        onUserLocationChange={event => {
-          const { coordinate } = event.nativeEvent;
-          if (!coordinate || activeRun.state !== 'running') {
-            return;
-          }
-
-          const location: LocationPoint = {
-            latitude: coordinate.latitude,
-            longitude: coordinate.longitude,
-            timestamp: Date.now(),
-            accuracy: coordinate.accuracy,
-            altitude: coordinate.altitude ?? undefined,
-            speed: coordinate.speed ?? undefined,
-          };
-
-          setActiveRun(previous => {
-            const nextPath = [...previous.path, location];
-            const nextDistance = calculatePathDistance(nextPath);
-            const nearLoop =
-              previous.path.length > 10 &&
-              isNearStartPoint(location, previous.path[0]);
-
-            return {
-              ...previous,
-              path: nextPath,
-              distance: nextDistance,
-              isNearStart: nearLoop,
-            };
-          });
-        }}
+        onUserLocationChange={handleLocationUpdate}
       >
         {targetTerritory && targetTerritory.boundary.length > 2 && (
           <Polygon
@@ -371,6 +630,10 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
             lineJoin="round"
           />
         )}
+
+        {activeRun.drops.map((drop: any) => (
+          <DropMarker key={drop.id} drop={drop} />
+        ))}
       </MapView>
 
       <LinearGradient
@@ -382,6 +645,22 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
         ]}
         style={styles.mapAtmosphere}
       />
+
+      {hasGhostMode && (
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            'rgba(177, 226, 255, 0.2)',
+            'rgba(12, 22, 40, 0.02)',
+            'rgba(196, 238, 255, 0.24)',
+          ]}
+          style={styles.ghostVignette}
+        />
+      )}
+
+      {pickupEffects.map(effect => (
+        <FloatingRewardText key={effect.id} effect={effect} />
+      ))}
 
       <View style={styles.header}>
         <TouchableOpacity
@@ -425,8 +704,8 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
           <Text style={styles.statLabel}>Duration</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{speed}</Text>
-          <Text style={styles.statLabel}>Speed</Text>
+          <Text style={styles.statValue}>{steps}</Text>
+          <Text style={styles.statLabel}>Steps</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>{territoriesInRange}</Text>
@@ -434,9 +713,59 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
         </View>
       </View>
 
-      <View style={styles.drawer}>
+      <DropsHUD
+        dropsCollected={rewardHud.dropsCollected}
+        coinsCollected={rewardHud.coinsCollected}
+        multiplierValue={rewardHud.multiplierValue}
+        multiplierRemainingMs={rewardHud.multiplierRemainingMs}
+        ghostRemainingMs={rewardHud.ghostRemainingMs}
+        flashKey={hudFlashKey}
+      />
+
+      {ghostBannerVisible && (
+        <Animated.View
+          style={[
+            styles.ghostBanner,
+            {
+              opacity: ghostBannerOpacity,
+              transform: [
+                {
+                  translateY: ghostBannerOpacity.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [10, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Text style={styles.ghostBannerText}>GHOST MODE ACTIVE</Text>
+        </Animated.View>
+      )}
+
+      <View
+        style={[
+          styles.drawer,
+          isDrawerCollapsed ? styles.drawerCollapsed : styles.drawerExpanded,
+        ]}
+      >
         <View style={styles.drawerHandle} />
-        <Text style={styles.drawerEyebrow}>Capture Drawer</Text>
+        <View style={styles.drawerTopRow}>
+          <Text style={styles.drawerEyebrow}>Frontline Command</Text>
+          <TouchableOpacity
+            style={styles.drawerToggle}
+            onPress={() => setIsDrawerCollapsed(previous => !previous)}
+          >
+            <Text style={styles.drawerToggleText}>
+              {isDrawerCollapsed ? 'Expand' : 'Collapse'}
+            </Text>
+            <Icon
+              name={isDrawerCollapsed ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color="#D58A15"
+            />
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.drawerHeader}>
           <View>
@@ -459,50 +788,58 @@ const ActiveRunScreen: React.FC<ActiveRunScreenProps> = ({
           </View>
         </View>
 
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${Math.max(progressPercent, isNearStart ? 100 : 4)}%` },
-            ]}
-          />
-        </View>
+        {!isDrawerCollapsed && (
+          <>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.max(progressPercent, isNearStart ? 100 : 4)}%` },
+                ]}
+              />
+            </View>
 
-        <View style={styles.drawerMetrics}>
-          <View style={styles.drawerMetric}>
-            <Icon name="shapes-outline" size={16} color="#57B8FF" />
-            <Text style={styles.drawerMetricValue}>
-              {(estimatedArea * 1_000_000).toFixed(0)} m²
-            </Text>
-            <Text style={styles.drawerMetricLabel}>Blob</Text>
-          </View>
-          <View style={styles.drawerMetric}>
-            <Icon name="flash-outline" size={16} color="#F2A12D" />
-            <Text style={styles.drawerMetricValue}>+{Math.round(distance * 90)}</Text>
-            <Text style={styles.drawerMetricLabel}>XP</Text>
-          </View>
-          <View style={styles.drawerMetric}>
-            <Icon name="timer-outline" size={16} color="#FF8B5E" />
-            <Text style={styles.drawerMetricValue}>{pace}</Text>
-            <Text style={styles.drawerMetricLabel}>Pace</Text>
-          </View>
-        </View>
+            <View style={styles.drawerMetrics}>
+              <View style={styles.drawerMetric}>
+                <Icon name="shapes-outline" size={16} color="#57B8FF" />
+                <Text style={styles.drawerMetricValue}>
+                  {(estimatedArea * 1_000_000).toFixed(0)} m²
+                </Text>
+                <Text style={styles.drawerMetricLabel}>Blob</Text>
+              </View>
+              <View style={styles.drawerMetric}>
+                <Icon name="flash-outline" size={16} color="#F2A12D" />
+                <Text style={styles.drawerMetricValue}>+{projectedXp}</Text>
+                <Text style={styles.drawerMetricLabel}>
+                  {rewardHud.multiplierValue ? 'XP Boosted' : 'XP'}
+                </Text>
+              </View>
+              <View style={styles.drawerMetric}>
+                <Icon name="footsteps-outline" size={16} color="#FF8B5E" />
+                <Text style={styles.drawerMetricValue}>{steps}</Text>
+                <Text style={styles.drawerMetricLabel}>Steps</Text>
+              </View>
+            </View>
 
-        <View style={styles.rulesCard}>
-          <View style={styles.rulesHeader}>
-            <Icon
-              name={signal.suspicious ? 'warning-outline' : 'shield-checkmark'}
-              size={18}
-              color={signal.suspicious ? '#FF8B5E' : '#60C676'}
-            />
-            <Text style={styles.rulesTitle}>{signal.label}</Text>
-          </View>
-          <Text style={styles.rulesText}>{signal.detail}</Text>
-          <Text style={styles.rulesText}>
-            Raid rule: loop at least 1 km and keep average speed under 25 km/h.
-          </Text>
-          <Text style={styles.rulesText}>Energy burned so far: {calories} kcal.</Text>
-        </View>
+            <View style={styles.rulesCard}>
+              <View style={styles.rulesHeader}>
+                <Icon
+                  name={signal.suspicious ? 'warning-outline' : 'shield-checkmark'}
+                  size={18}
+                  color={signal.suspicious ? '#FF8B5E' : '#60C676'}
+                />
+                <Text style={styles.rulesTitle}>{signal.label}</Text>
+              </View>
+              <Text style={styles.rulesText}>{signal.detail}</Text>
+              <Text style={styles.rulesText}>
+                Raid rule: loop at least 1 km and keep average speed under 25 km/h.
+              </Text>
+              <Text style={styles.rulesText}>
+                Live steps: {steps}. Energy burned so far: {calories} kcal.
+              </Text>
+            </View>
+          </>
+        )}
 
         {isNearStart && (
           <TouchableOpacity style={styles.claimButton} onPress={handleClaim}>
@@ -541,6 +878,23 @@ const styles = StyleSheet.create({
   },
   mapAtmosphere: {
     ...StyleSheet.absoluteFillObject,
+  },
+  ghostVignette: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  floatingReward: {
+    position: 'absolute',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(9, 20, 37, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 194, 79, 0.34)',
+  },
+  floatingRewardText: {
+    color: '#F6D16B',
+    fontSize: 13,
+    fontWeight: '900',
   },
   header: {
     position: 'absolute',
@@ -632,6 +986,25 @@ const styles = StyleSheet.create({
     marginTop: 3,
     textTransform: 'uppercase',
   },
+  ghostBanner: {
+    position: 'absolute',
+    top:
+      (Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 10 : 52) +
+      132,
+    alignSelf: 'center',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(203, 238, 255, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(88, 184, 255, 0.38)',
+  },
+  ghostBannerText: {
+    color: '#1B4A6B',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+  },
   drawer: {
     position: 'absolute',
     left: 0,
@@ -646,6 +1019,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(241, 219, 182, 0.8)',
     paddingHorizontal: 18,
     paddingTop: 12,
+  },
+  drawerCollapsed: {
+    paddingBottom: 18,
+  },
+  drawerExpanded: {
     paddingBottom: 30,
   },
   drawerHandle: {
@@ -656,13 +1034,33 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   drawerEyebrow: {
-    alignSelf: 'center',
-    marginTop: 10,
     color: '#D58A15',
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
+  },
+  drawerTopRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  drawerToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(242, 161, 45, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(242, 161, 45, 0.2)',
+  },
+  drawerToggleText: {
+    color: '#D58A15',
+    fontSize: 12,
+    fontWeight: '800',
   },
   drawerHeader: {
     marginTop: 16,

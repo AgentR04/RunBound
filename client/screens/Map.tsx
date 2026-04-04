@@ -50,6 +50,11 @@ import {
   simplifyPolygon,
 } from '../utils/territoryUtils';
 
+const {
+  createActiveRunState,
+  hydratePathRewardState,
+} = require('../src/engines/DropEngine');
+
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const COLLAPSED_HEIGHT = 270;
 const HALF_HEIGHT = SCREEN_HEIGHT * 0.52;
@@ -250,15 +255,17 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     user?.email?.split('@')[0] ??
     FALLBACK_USER_NAME;
 
-  const [activeRun, setActiveRun] = useState<ActiveRun>({
-    state: 'idle',
-    startTime: null,
-    path: [],
-    distance: 0,
-    duration: 0,
-    pausedDuration: 0,
-    isNearStart: false,
-  });
+  const [activeRun, setActiveRun] = useState<ActiveRun>(
+    hydratePathRewardState({
+      state: 'idle',
+      startTime: null,
+      path: [],
+      distance: 0,
+      duration: 0,
+      pausedDuration: 0,
+      isNearStart: false,
+    }),
+  );
   const [territories, setTerritories] = useState<Territory[]>([]);
   const [userLocation, setUserLocation] = useState<LocationPoint | null>(null);
   const [hasLocationPermission, setHasLocationPermission] = useState(false);
@@ -797,15 +804,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         return;
       }
 
-      const newRun = {
-        state: 'running' as const,
-        startTime: new Date(),
-        path: [userLocation],
-        distance: 0,
-        duration: 0,
-        pausedDuration: 0,
-        isNearStart: false,
-      };
+      const newRun = createActiveRunState(userLocation, new Date()) as ActiveRun;
 
       if (isMounted.current) {
         setActiveRun(newRun);
@@ -815,10 +814,16 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       navigation.navigate('ActiveRun', {
         initialActiveRun: newRun,
         targetTerritory: selectedTerritory?.territory ?? null,
+        runnerProfile: {
+          id: currentUserId,
+          username: currentUserName,
+          color: '#29F0D7',
+        },
         onPause: () => setActiveRun(previous => ({ ...previous, state: 'paused' })),
         onResume: () => setActiveRun(previous => ({ ...previous, state: 'running' })),
         onStop: () => {
-          setActiveRun({
+          setActiveRun(
+            hydratePathRewardState({
             state: 'idle',
             startTime: null,
             path: [],
@@ -826,7 +831,8 @@ const RunMap = ({ navigation }: { navigation: any }) => {
             duration: 0,
             pausedDuration: 0,
             isNearStart: false,
-          });
+            }),
+          );
           setTimer(0);
         },
         onClaim: handleClaimTerritory,
@@ -899,6 +905,11 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         territoryClaimed: newTerritory.id,
         territoriesChallenged: [],
         calories,
+        pathRewardSummary: {
+          collectedDrops: activeRun.collectedDrops,
+          coinsCollected: activeRun.coinsCollected,
+          shieldsCollected: activeRun.shieldChargesEarned,
+        },
       };
 
       const saveTasks: Array<Promise<unknown>> = [
@@ -927,13 +938,19 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         setTerritories(previous => [...previous, newTerritory]);
       }
 
-      const xpEarned = Math.round(activeRun.distance * 90) + 180;
+      const activeMultiplier =
+        activeRun.multiplierExpiresAt &&
+        activeRun.multiplierExpiresAt > Date.now()
+          ? activeRun.captureMultiplier
+          : 1;
+      const xpEarned = Math.round((activeRun.distance * 90 + 180) * activeMultiplier);
       showCaptureToast(
         `+${xpEarned} XP`,
         `${getTerritoryName(newTerritory)} captured`,
       );
       setSelectedTerritoryId(newTerritory.id);
-      setActiveRun({
+      setActiveRun(
+        hydratePathRewardState({
         state: 'idle',
         startTime: null,
         path: [],
@@ -941,7 +958,8 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         duration: 0,
         pausedDuration: 0,
         isNearStart: false,
-      });
+        }),
+      );
       setTimer(0);
     } catch (error) {
       console.error('Error claiming territory:', error);
@@ -1024,12 +1042,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                   previous.path.length > 10 &&
                   isNearStartPoint(location, previous.path[0]);
 
-                return {
+                return hydratePathRewardState({
                   ...previous,
                   path: nextPath,
                   distance: nextDistance,
                   isNearStart: isNearLoop,
-                };
+                });
               });
             }
           }}

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import appStorage from './appStorage';
 
 // Location point interface
 export interface LocationPoint {
@@ -74,7 +74,7 @@ class ActivityStorageService {
         activities.unshift(activity);
       }
 
-      await AsyncStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(activities));
+      await appStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(activities));
 
       // Add to sync queue for server upload
       await this.addToSyncQueue('CREATE_ACTIVITY', activity);
@@ -86,7 +86,7 @@ class ActivityStorageService {
 
   async getActivities(): Promise<Activity[]> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVITIES);
+      const data = await appStorage.getItem(STORAGE_KEYS.ACTIVITIES);
       return data ? JSON.parse(data) : [];
     } catch (error) {
       console.error('Failed to get activities:', error);
@@ -111,7 +111,7 @@ class ActivityStorageService {
 
       if (index >= 0) {
         activities[index] = { ...activities[index], ...updates };
-        await AsyncStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(activities));
+        await appStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(activities));
 
         // Add to sync queue
         await this.addToSyncQueue('UPDATE_ACTIVITY', { id, ...updates });
@@ -126,7 +126,7 @@ class ActivityStorageService {
     try {
       const activities = await this.getActivities();
       const filtered = activities.filter(a => a.id !== id);
-      await AsyncStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(filtered));
+      await appStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(filtered));
 
       // Add to sync queue
       await this.addToSyncQueue('DELETE_ACTIVITY', { id });
@@ -153,7 +153,7 @@ class ActivityStorageService {
         records.push(record);
       }
 
-      await AsyncStorage.setItem(STORAGE_KEYS.PERSONAL_RECORDS, JSON.stringify(records));
+      await appStorage.setItem(STORAGE_KEYS.PERSONAL_RECORDS, JSON.stringify(records));
     } catch (error) {
       console.error('Failed to save personal record:', error);
       throw error;
@@ -162,7 +162,7 @@ class ActivityStorageService {
 
   async getPersonalRecords(): Promise<PersonalRecord[]> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.PERSONAL_RECORDS);
+      const data = await appStorage.getItem(STORAGE_KEYS.PERSONAL_RECORDS);
       return data ? JSON.parse(data) : [];
     } catch (error) {
       console.error('Failed to get personal records:', error);
@@ -264,7 +264,7 @@ class ActivityStorageService {
         data,
         timestamp: Date.now(),
       });
-      await AsyncStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(queue));
+      await appStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(queue));
     } catch (error) {
       console.error('Failed to add to sync queue:', error);
     }
@@ -272,7 +272,7 @@ class ActivityStorageService {
 
   private async getSyncQueue(): Promise<any[]> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.SYNC_QUEUE);
+      const data = await appStorage.getItem(STORAGE_KEYS.SYNC_QUEUE);
       return data ? JSON.parse(data) : [];
     } catch (error) {
       console.error('Failed to get sync queue:', error);
@@ -290,7 +290,7 @@ class ActivityStorageService {
       await this.downloadFromServer();
 
       // Update last sync timestamp
-      await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
+      await appStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
     } catch (error) {
       console.error('Failed to sync with server:', error);
       throw error;
@@ -320,7 +320,7 @@ class ActivityStorageService {
     }
 
     // Clear sync queue
-    await AsyncStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify([]));
+    await appStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify([]));
   }
 
   private async uploadActivity(activity: Activity): Promise<void> {
@@ -364,7 +364,7 @@ class ActivityStorageService {
       const activitiesResponse = await fetch(`${API_BASE_URL}/activities`);
       if (activitiesResponse.ok) {
         const { activities } = await activitiesResponse.json();
-        await AsyncStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(activities));
+        await appStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(activities));
       }
 
       // Download analytics data
@@ -372,7 +372,7 @@ class ActivityStorageService {
       if (analyticsResponse.ok) {
         const analyticsData = await analyticsResponse.json();
         if (analyticsData.personalRecords) {
-          await AsyncStorage.setItem(STORAGE_KEYS.PERSONAL_RECORDS, JSON.stringify(analyticsData.personalRecords));
+          await appStorage.setItem(STORAGE_KEYS.PERSONAL_RECORDS, JSON.stringify(analyticsData.personalRecords));
         }
       }
     } catch (error) {
@@ -384,7 +384,7 @@ class ActivityStorageService {
   // Utility methods
   async clearAllData(): Promise<void> {
     try {
-      await AsyncStorage.multiRemove([
+      await appStorage.multiRemove([
         STORAGE_KEYS.ACTIVITIES,
         STORAGE_KEYS.PERSONAL_RECORDS,
         STORAGE_KEYS.SYNC_QUEUE,
@@ -398,8 +398,8 @@ class ActivityStorageService {
 
   async getLastSyncTimestamp(): Promise<number> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC);
-      return data ? parseInt(data) : 0;
+      const data = await appStorage.getItem(STORAGE_KEYS.LAST_SYNC);
+      return data ? parseInt(data, 10) : 0;
     } catch (error) {
       console.error('Failed to get last sync timestamp:', error);
       return 0;

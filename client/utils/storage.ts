@@ -1,16 +1,10 @@
 // Temporary in-memory storage to replace AsyncStorage
-import { Run, Territory, User } from '../types/game';
+import { MOCK_USER, Run, Territory, User } from '../types/game';
 
 // In-memory storage
 let runs: Run[] = [];
 let territories: Territory[] = [];
 let user: User | null = null;
-
-const STORAGE_KEYS = {
-  RUNS: 'runbound_runs',
-  TERRITORIES: 'runbound_territories',
-  USER: 'runbound_user',
-};
 
 /**
  * Save a completed run to local storage
@@ -101,6 +95,82 @@ export async function getUser(): Promise<User | null> {
     console.error('Error loading user:', error);
     return null;
   }
+}
+
+/**
+ * Ensure there is a local user profile to apply reward updates against.
+ */
+export async function ensureLocalUserProfile(
+  identity: Pick<User, 'id' | 'username'> & Partial<Pick<User, 'color'>>,
+): Promise<User> {
+  const existing = await getUser();
+
+  if (existing && existing.id === identity.id) {
+    return existing;
+  }
+
+  const nextUser: User = {
+    ...MOCK_USER,
+    id: identity.id,
+    username: identity.username,
+    color: identity.color ?? existing?.color ?? MOCK_USER.color,
+    territories: existing?.territories ?? [],
+    totalArea: existing?.totalArea ?? 0,
+    totalRuns: existing?.totalRuns ?? 0,
+    totalDistance: existing?.totalDistance ?? 0,
+    friends: existing?.friends ?? [],
+    streaks: existing?.streaks ?? MOCK_USER.streaks,
+    activeBoosts: existing?.activeBoosts ?? MOCK_USER.activeBoosts,
+    coins: existing?.coins ?? 0,
+    shieldCharges: existing?.shieldCharges ?? 0,
+    shieldActive: Boolean(
+      existing?.shieldActive &&
+        (!existing.shieldExpiresAt || existing.shieldExpiresAt > Date.now()),
+    ),
+    shieldExpiresAt:
+      existing?.shieldExpiresAt && existing.shieldExpiresAt > Date.now()
+        ? existing.shieldExpiresAt
+        : null,
+    createdAt: existing?.createdAt ?? new Date(),
+  };
+
+  await saveUser(nextUser);
+  return nextUser;
+}
+
+/**
+ * Apply reward inventory changes to the local user profile.
+ */
+export async function updateLocalUserRewards(
+  identity: Pick<User, 'id' | 'username'> & Partial<Pick<User, 'color'>>,
+  updates: {
+    coinsDelta?: number;
+    shieldDelta?: number;
+    shieldExpiresAt?: number | null;
+  },
+): Promise<User> {
+  const currentUser = await ensureLocalUserProfile(identity);
+  const nextShieldExpiresAt =
+    updates.shieldExpiresAt !== undefined
+      ? updates.shieldExpiresAt
+      : currentUser.shieldExpiresAt;
+
+  const updatedUser: User = {
+    ...currentUser,
+    coins: currentUser.coins + (updates.coinsDelta ?? 0),
+    shieldCharges: currentUser.shieldCharges + (updates.shieldDelta ?? 0),
+    shieldActive:
+      !!nextShieldExpiresAt && nextShieldExpiresAt > Date.now()
+        ? true
+        : currentUser.shieldActive && !!currentUser.shieldExpiresAt,
+    shieldExpiresAt:
+      nextShieldExpiresAt && nextShieldExpiresAt > Date.now()
+        ? nextShieldExpiresAt
+        : null,
+  };
+
+  await saveUser(updatedUser);
+  return updatedUser;
 }
 
 /**
