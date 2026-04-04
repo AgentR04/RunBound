@@ -1,0 +1,42 @@
+{
+  "id": "test-run-002",
+  "type": "run",
+  "distance": 3100,
+  "duration": 1200000,
+  "startTime": "2024-04-02T07:00:00.000Z",
+  "endTime": "2024-04-02T07:20:00.000Z",
+  "averagePace": 387,
+  "topSpeed": 11.5,
+  "caloriesBurned": 248,
+  "elevationGain": 20,
+  "route": [
+    {
+      "latitude": 37.7849,
+      "longitude": -122.4094,
+      "timestamp": "2024-04-02T07:00:00.000Z",
+      "altitude": 10,
+      "speed": 11
+    },
+    {
+      "latitude": 37.7859,
+      "longitude": -122.4084,
+      "timestamp": "2024-04-02T07:10:00.000Z",
+      "altitude": 20,
+      "speed": 11.5
+    },
+    {
+      "latitude": 37.7869,
+      "longitude": -122.4074,
+      "timestamp": "2024-04-02T07:20:00.000Z",
+      "altitude": 30,
+      "speed": 11
+    }
+  ],
+  "paceZones": {
+    "zone1": 20,
+    "zone2": 50,
+    "zone3": 25,
+    "zone4": 5,
+    "zone5": 0
+  }
+}

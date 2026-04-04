@@ -7,14 +7,47 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  ActivityIndicator,
+  Text,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import ActiveRun from './screens/ActiveRun';
 import Feed from './screens/Feed';
 import Home from './screens/Home';
 import RunMap from './screens/Map';
 import Profile from './screens/Profile';
 import Run from './screens/Run';
+import LoginScreen from './screens/auth/LoginScreen';
+import RegisterScreen from './screens/auth/RegisterScreen';
+
+function AuthStack() {
+  const Stack = createNativeStackNavigator();
+  
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <View style={styles.loadingContainer}>
+      <Image
+        source={require('./assets/logo/RunBound White.png')}
+        style={styles.loadingLogo}
+      />
+      <ActivityIndicator size="large" color="#52FF30" style={styles.spinner} />
+      <Text style={styles.loadingText}>Loading RunBound...</Text>
+    </View>
+  );
+}
 
 function RootStack() {
   const Stack = createNativeStackNavigator();
@@ -136,11 +169,23 @@ function RootStack() {
   );
 }
 
+function AppNavigator() {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+  
+  return isAuthenticated ? <RootStack /> : <AuthStack />;
+}
+
 export default function App() {
   return (
-    <NavigationContainer>
-      <RootStack />
-    </NavigationContainer>
+    <AuthProvider>
+      <NavigationContainer>
+        <AppNavigator />
+      </NavigationContainer>
+    </AuthProvider>
   );
 }
 
@@ -185,5 +230,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 20,
     top: 60,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#141412',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingLogo: {
+    width: 100,
+    height: 100,
+    marginBottom: 30,
+  },
+  spinner: {
+    marginBottom: 20,
+  },
+  loadingText: {
+    color: '#777',
+    fontSize: 16,
   },
 });
