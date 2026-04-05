@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android",
+    "android:bundle": "if not exist android\\app\\src\\main\\assets mkdir android\\app\\src\\main\\assets && react-native bundle --platform android --dev false --entry-file index.js --bundle-output android\\app\\src\\main\\assets\\index.android.bundle --assets-dest android\\app\\src\\main\\res\\",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
@@ -25,7 +26,6 @@
     "react-native-geolocation-service": "^5.3.1",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-maps": "^1.26.20",
-    "react-native-reanimated": "^4.3.0",
     "react-native-safe-area-context": "^5.6.2",
     "react-native-screens": "^4.19.0",
     "react-native-vector-icons": "^10.3.0",
