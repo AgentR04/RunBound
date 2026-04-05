@@ -11,6 +11,15 @@ export interface TerritoryIntel {
   decayHoursRemaining: number;
   areaM2: number;
   strength: number;
+  decorationValueCoins: number;
+  claimStakeCoins: number;
+  claimPrizeCoins: number;
+  decorations: Array<{
+    id: string;
+    label: string;
+    placement: 'interior' | 'edge';
+    priceCoins: number;
+  }>;
 }
 
 export interface MarathonLeaderboardIntel {
@@ -281,13 +290,54 @@ export default function TerritoryIntelSheet({
             </View>
           </View>
 
+          <View style={[styles.rewardGrid, styles.summaryGrid]}>
+            <View style={styles.rewardCard}>
+              <Text style={styles.rewardValue}>
+                {selectedTerritory.decorationValueCoins}
+              </Text>
+              <Text style={styles.rewardLabel}>Decor value</Text>
+            </View>
+            <View style={styles.rewardCard}>
+              <Text style={styles.rewardValue}>{selectedTerritory.claimStakeCoins}</Text>
+              <Text style={styles.rewardLabel}>Stake</Text>
+            </View>
+            <View style={styles.rewardCard}>
+              <Text style={styles.rewardValue}>{selectedTerritory.claimPrizeCoins}</Text>
+              <Text style={styles.rewardLabel}>Prize</Text>
+            </View>
+          </View>
+
           <View style={styles.detailRow}>
             <View style={styles.detailPill}>
               <Icon name="walk-outline" size={14} color="#F5C15D" />
               <Text style={styles.detailText}>
-                Avengers protocol: complete a clean loop to carve a new zone
+                Avengers protocol: complete a clean loop to carve a new zone. Higher decoration value raises both stake and prize.
               </Text>
             </View>
+          </View>
+
+          <View style={styles.decorationsSection}>
+            <View style={styles.decorationsHeader}>
+              <Icon name="cube-outline" size={14} color="#67E6FF" />
+              <Text style={styles.decorationsTitle}>Decorations on territory</Text>
+            </View>
+            {selectedTerritory.decorations.length > 0 ? (
+              selectedTerritory.decorations.map(decoration => (
+                <View key={decoration.id} style={styles.decorationRow}>
+                  <View style={styles.decorationInfo}>
+                    <Text style={styles.decorationName}>{decoration.label}</Text>
+                    <Text style={styles.decorationMeta}>
+                      {decoration.placement === 'edge' ? 'Edge' : 'Interior'}
+                    </Text>
+                  </View>
+                  <Text style={styles.decorationPrice}>{decoration.priceCoins} coins</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noDecorationsText}>
+                No decorations placed on this territory yet.
+              </Text>
+            )}
           </View>
 
           <View style={styles.actionRow}>
@@ -532,6 +582,59 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#DCE8F7',
     fontSize: 13,
+    fontFamily: UI_FONT,
+  },
+  decorationsSection: {
+    marginTop: 16,
+    borderRadius: 18,
+    padding: 12,
+    backgroundColor: 'rgba(103, 230, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.16)',
+  },
+  decorationsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  decorationsTitle: {
+    color: '#EAF7FF',
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    fontFamily: UI_FONT,
+  },
+  decorationRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  decorationInfo: {
+    flex: 1,
+  },
+  decorationName: {
+    color: '#F4F8FF',
+    fontSize: 14,
+    fontFamily: UI_FONT,
+  },
+  decorationMeta: {
+    marginTop: 2,
+    color: '#9DB7D4',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    fontFamily: UI_FONT,
+  },
+  decorationPrice: {
+    color: '#F5C15D',
+    fontSize: 13,
+    fontFamily: STAT_FONT,
+  },
+  noDecorationsText: {
+    marginTop: 10,
+    color: '#9DB7D4',
+    fontSize: 12,
     fontFamily: UI_FONT,
   },
   actionRow: {

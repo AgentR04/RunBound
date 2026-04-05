@@ -204,7 +204,7 @@ export async function ensureLocalUserProfile(
     shieldCharges: existing?.shieldCharges ?? 0,
     shieldActive: Boolean(
       existing?.shieldActive &&
-        (!existing.shieldExpiresAt || existing.shieldExpiresAt > Date.now()),
+      (!existing.shieldExpiresAt || existing.shieldExpiresAt > Date.now()),
     ),
     shieldExpiresAt:
       existing?.shieldExpiresAt && existing.shieldExpiresAt > Date.now()

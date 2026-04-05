@@ -36,6 +36,7 @@ import {
   claimTerritory as apiClaimTerritory,
   fetchTerritories,
 } from '../services/api';
+import { supabase } from '../lib/supabase';
 import {
   ActiveRun,
   MarathonTerritory,
@@ -52,8 +53,14 @@ import {
 import {
   getMockMarathonTerritories,
   getMockTerritories,
+  getMockTerritoryDecorations,
 } from '../utils/mockTerritories';
-import { saveRun, saveTerritory, updateUserStats } from '../utils/storage';
+import {
+  saveRun,
+  saveTerritory,
+  updateLocalUserRewards,
+  updateUserStats,
+} from '../utils/storage';
 import {
   calculatePolygonArea,
   getPolygonCenter,
@@ -70,7 +77,13 @@ const {
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DECORATION_DRAWER_WIDTH = 138;
-type DecorationDrawerSection = 'root' | 'asgard' | 'new-york';
+const MAP_3D_PITCH = 58;
+const BASE_CLAIM_STAKE_COINS = 120;
+const BASE_CLAIM_PRIZE_COINS = 220;
+const DECORATION_STAKE_MULTIPLIER = 0.35;
+const DECORATION_PRIZE_MULTIPLIER = 0.65;
+type DecorationDrawerSection = 'root' | 'asgard' | 'new-york' | 'defenses';
+type DecorationPlacement = 'interior' | 'edge';
 
 const DECORATION_COLLECTIONS = {
   asgard: [
@@ -78,16 +91,22 @@ const DECORATION_COLLECTIONS = {
       id: 'loki-weapon',
       label: 'Loki Weapon',
       image: require('../assets/img/loki_weapon-removebg-preview.png'),
+      placement: 'interior',
+      priceCoins: 320,
     },
     {
       id: 'storm-breaker',
       label: 'Storm Breaker',
       image: require('../assets/img/stormbreaker.jpeg'),
+      placement: 'interior',
+      priceCoins: 480,
     },
     {
       id: 'thors-hammer',
       label: "Thor's Hammer",
       image: require('../assets/img/thor_hammer.jpeg'),
+      placement: 'interior',
+      priceCoins: 450,
     },
   ],
   'new-york': [
@@ -95,11 +114,24 @@ const DECORATION_COLLECTIONS = {
       id: 'stark-tower',
       label: 'Stark Tower',
       image: require('../assets/img/stark_tower.png'),
+      placement: 'interior',
+      priceCoins: 520,
     },
     {
       id: 'captain-america-shield',
       label: 'Captain America Shield',
       image: require('../assets/img/cap_ssheil-removebg-preview.png'),
+      placement: 'interior',
+      priceCoins: 360,
+    },
+  ],
+  defenses: [
+    {
+      id: 'territory-wall',
+      label: 'Wall',
+      placement: 'edge',
+      iconName: 'reorder-three-outline',
+      priceCoins: 180,
     },
   ],
 } as const;
@@ -113,6 +145,15 @@ const DEFAULT_MUMBAI_REGION = {
   longitude: 72.8777,
   latitudeDelta: 0.01,
   longitudeDelta: 0.01,
+};
+const DEFAULT_MAP_CAMERA = {
+  center: {
+    latitude: DEFAULT_MUMBAI_REGION.latitude,
+    longitude: DEFAULT_MUMBAI_REGION.longitude,
+  },
+  pitch: MAP_3D_PITCH,
+  heading: 0,
+  zoom: 16,
 };
 const FALLBACK_USER_ID = 'user-1';
 const FALLBACK_USER_NAME = 'Aarav';
@@ -163,7 +204,10 @@ type TerritoryDecoration = {
   id: string;
   territoryId: string;
   label: string;
-  image: any;
+  image?: any;
+  iconName?: string;
+  placement: DecorationPlacement;
+  priceCoins?: number;
   coordinate: {
     latitude: number;
     longitude: number;
@@ -173,7 +217,10 @@ type TerritoryDecoration = {
 type DecorationItem = {
   id: string;
   label: string;
-  image: any;
+  image?: any;
+  iconName?: string;
+  placement: DecorationPlacement;
+  priceCoins: number;
 };
 
 type TerritoryDisplay = {
@@ -279,7 +326,12 @@ function distanceBetweenPointsMeters(
 function getDecorationCoordinate(
   boundary: LocationPoint[],
   existingCoordinates: Array<{ latitude: number; longitude: number }>,
+  placement: DecorationPlacement = 'interior',
 ) {
+  if (placement === 'edge') {
+    return getDecorationEdgeCoordinate(boundary, existingCoordinates);
+  }
+
   const minLatitude = Math.min(...boundary.map(point => point.latitude));
   const maxLatitude = Math.max(...boundary.map(point => point.latitude));
   const minLongitude = Math.min(...boundary.map(point => point.longitude));
@@ -323,6 +375,114 @@ function getDecorationCoordinate(
   }
 
   return bestCandidate;
+}
+
+function getDecorationEdgeCoordinate(
+  boundary: LocationPoint[],
+  existingCoordinates: Array<{ latitude: number; longitude: number }>,
+) {
+  if (boundary.length < 2) {
+    return getPolygonCenter(boundary);
+  }
+
+  const minimumSpacingMeters = 42;
+  let bestCandidate = {
+    latitude: boundary[0].latitude,
+    longitude: boundary[0].longitude,
+    timestamp: Date.now(),
+  };
+  let bestDistance = -1;
+
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    const segmentStartIndex = Math.floor(Math.random() * boundary.length);
+    const segmentEndIndex = (segmentStartIndex + 1) % boundary.length;
+    const start = boundary[segmentStartIndex];
+    const end = boundary[segmentEndIndex];
+    const along = Math.random();
+    const candidate = {
+      latitude: start.latitude + (end.latitude - start.latitude) * along,
+      longitude: start.longitude + (end.longitude - start.longitude) * along,
+      timestamp: Date.now(),
+    };
+
+    const nearestDistance = existingCoordinates.length
+      ? Math.min(
+          ...existingCoordinates.map(existing =>
+            distanceBetweenPointsMeters(candidate, existing),
+          ),
+        )
+      : Number.POSITIVE_INFINITY;
+
+    if (nearestDistance >= minimumSpacingMeters) {
+      return candidate;
+    }
+
+    if (nearestDistance > bestDistance) {
+      bestCandidate = candidate;
+      bestDistance = nearestDistance;
+    }
+  }
+
+  return bestCandidate;
+}
+
+function calculateClaimEconomics(totalDecorationValueCoins: number) {
+  const stakeCoins =
+    BASE_CLAIM_STAKE_COINS +
+    Math.round(totalDecorationValueCoins * DECORATION_STAKE_MULTIPLIER);
+  const prizeCoins =
+    BASE_CLAIM_PRIZE_COINS +
+    Math.round(totalDecorationValueCoins * DECORATION_PRIZE_MULTIPLIER);
+
+  return { stakeCoins, prizeCoins };
+}
+
+function createSimulationPath(
+  center: LocationPoint,
+  startedAtMs: number,
+  durationSeconds: number,
+) {
+  const pointCount = 24;
+  const path: LocationPoint[] = [];
+
+  for (let index = 0; index < pointCount; index += 1) {
+    const angle = (Math.PI * 2 * index) / pointCount;
+    const radiusMeters = 155;
+    const xMeters = Math.cos(angle) * radiusMeters;
+    const yMeters = Math.sin(angle) * radiusMeters;
+    const pointTime =
+      startedAtMs + Math.floor((durationSeconds * 1000 * index) / pointCount);
+
+    path.push({
+      latitude: center.latitude + metersToLat(yMeters),
+      longitude: center.longitude + metersToLng(xMeters, center.latitude),
+      timestamp: pointTime,
+      accuracy: 5,
+      speed: 3.4,
+    });
+  }
+
+  if (path.length > 0) {
+    path.push({
+      ...path[0],
+      timestamp: startedAtMs + durationSeconds * 1000,
+    });
+  }
+
+  return path;
+}
+
+function createUuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+  return template.replace(/[xy]/g, character => {
+    const randomNibble = Math.floor(Math.random() * 16);
+    const nibble = character === 'x' ? randomNibble : (randomNibble & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
 }
 
 function getTerritoryName(territory: Territory) {
@@ -468,8 +628,13 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   >([]);
   const [isHudCollapsed, setIsHudCollapsed] = useState(true);
   const [areFiltersCollapsed, setAreFiltersCollapsed] = useState(true);
+  const [simulationPath, setSimulationPath] = useState<LocationPoint[]>([]);
+  const [useSpoofedPointer, setUseSpoofedPointer] = useState(__DEV__);
+  const [spoofedPointer, setSpoofedPointer] = useState<LocationPoint | null>(null);
 
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeRunRef = useRef(activeRun);
+  const timerRef = useRef(timer);
   const isMounted = useRef(true);
   const hasCenteredOnUser = useRef(false);
   const mockSeedKeyRef = useRef('');
@@ -533,6 +698,19 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       ? marathonDisplays.find(display => display.territory.id === selectedZone.id) ??
         null
       : null;
+  const selectedTerritoryDecorations =
+    selectedTerritory
+      ? territoryDecorations.filter(
+          decoration => decoration.territoryId === selectedTerritory.territory.id,
+        )
+      : [];
+  const selectedTerritoryDecorationValue = selectedTerritoryDecorations.reduce(
+    (sum, decoration) => sum + (decoration.priceCoins ?? 0),
+    0,
+  );
+  const selectedTerritoryClaimEconomics = selectedTerritory
+    ? calculateClaimEconomics(selectedTerritoryDecorationValue)
+    : null;
   const isSelectedTerritoryOwnedByCurrentUser =
     selectedTerritory?.territory.ownerId === currentUserId;
   const ownedTerritories = territories.filter(
@@ -810,7 +988,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         const centerLng = userLocation?.longitude ?? mapRegion.longitude;
 
         if (isMounted.current) {
-          setTerritories(getMockTerritories(centerLat, centerLng));
+          const mockTerritories = getMockTerritories(centerLat, centerLng);
+          setTerritories(mockTerritories);
+          setTerritoryDecorations(getMockTerritoryDecorations(mockTerritories));
           setMarathonTerritories(
             getMockMarathonTerritories(centerLat, centerLng, {
               id: currentUserId,
@@ -837,12 +1017,23 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
         if (Array.isArray(loaded) && loaded.length > 0) {
           setTerritories(loaded as Territory[]);
+          setTerritoryDecorations([]);
         } else {
-          setTerritories(getMockTerritories(mapRegion.latitude, mapRegion.longitude));
+          const mockTerritories = getMockTerritories(
+            mapRegion.latitude,
+            mapRegion.longitude,
+          );
+          setTerritories(mockTerritories);
+          setTerritoryDecorations(getMockTerritoryDecorations(mockTerritories));
         }
       } catch {
         if (isMounted.current) {
-          setTerritories(getMockTerritories(mapRegion.latitude, mapRegion.longitude));
+          const mockTerritories = getMockTerritories(
+            mapRegion.latitude,
+            mapRegion.longitude,
+          );
+          setTerritories(mockTerritories);
+          setTerritoryDecorations(getMockTerritoryDecorations(mockTerritories));
           setMarathonTerritories(
             getMockMarathonTerritories(mapRegion.latitude, mapRegion.longitude, {
               id: currentUserId,
@@ -875,7 +1066,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
     }
 
     mockSeedKeyRef.current = seedKey;
-    setTerritories(getMockTerritories(userLocation.latitude, userLocation.longitude));
+    const mockTerritories = getMockTerritories(
+      userLocation.latitude,
+      userLocation.longitude,
+    );
+    setTerritories(mockTerritories);
+    setTerritoryDecorations(getMockTerritoryDecorations(mockTerritories));
     setMarathonTerritories(
       getMockMarathonTerritories(userLocation.latitude, userLocation.longitude, {
         id: currentUserId,
@@ -954,6 +1150,14 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   }, []);
 
   useEffect(() => {
+    activeRunRef.current = activeRun;
+  }, [activeRun]);
+
+  useEffect(() => {
+    timerRef.current = timer;
+  }, [timer]);
+
+  useEffect(() => {
     if (activeRun.state === 'running') {
       timerInterval.current = setInterval(() => {
         if (isMounted.current) {
@@ -984,6 +1188,41 @@ const RunMap = ({ navigation }: { navigation: any }) => {
   }, [overlays.heatmap, userLocation]);
 
   useEffect(() => {
+    if (!useSpoofedPointer || !userLocation) {
+      if (!useSpoofedPointer) {
+        setSpoofedPointer(null);
+      }
+      return;
+    }
+
+    setSpoofedPointer(userLocation);
+  }, [useSpoofedPointer, userLocation]);
+
+  useEffect(() => {
+    if (!useSpoofedPointer || !userLocation) {
+      return;
+    }
+
+    const spoofTimer = setInterval(() => {
+      setSpoofedPointer(previous => {
+        const base = previous ?? userLocation;
+        const jitterLat = (Math.random() - 0.5) * 0.00008;
+        const jitterLng = (Math.random() - 0.5) * 0.00008;
+
+        return {
+          ...base,
+          latitude: base.latitude + jitterLat,
+          longitude: base.longitude + jitterLng,
+          timestamp: Date.now(),
+          accuracy: 3,
+        };
+      });
+    }, 1100);
+
+    return () => clearInterval(spoofTimer);
+  }, [useSpoofedPointer, userLocation]);
+
+  useEffect(() => {
     if (
       selectedZone?.kind === 'claimed' &&
       !territoryDisplays.some(display => display.territory.id === selectedZone.id)
@@ -1006,20 +1245,43 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       return;
     }
 
-    mapRef.current.animateToRegion(
+    const nextRegion = {
+      latitude: userLocation.latitude,
+      longitude: userLocation.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+    setMapRegion(nextRegion);
+    mapRef.current.animateCamera(
       {
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+        center: {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+        },
+        pitch: MAP_3D_PITCH,
+        heading: 0,
+        zoom: 16,
       },
-      500,
+      { duration: 500 },
     );
   };
 
   const handleTerritoryPress = (zone: NonNullable<SelectedMapZone>) => {
     setSelectedZone(zone);
     snapToPosition(HALF_HEIGHT);
+
+    if (zone.kind !== 'claimed') {
+      return;
+    }
+
+    const pressedTerritory = territoryDisplays.find(
+      display => display.territory.id === zone.id,
+    );
+
+    if (pressedTerritory?.territory.ownerId === currentUserId) {
+      setIsDecorationDrawerOpen(true);
+      setDecorationDrawerSection('root');
+    }
   };
 
   const handleViewOwnerProfile = () => {
@@ -1053,7 +1315,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
     Alert.alert(
       'Challenge Started',
-      `${selectedTerritory.name} is now contested. Complete a clean loop to overtake it.`,
+      `${selectedTerritory.name} is now contested. Stakes: ${selectedTerritoryClaimEconomics?.stakeCoins ?? BASE_CLAIM_STAKE_COINS} coins. Capture prize: ${selectedTerritoryClaimEconomics?.prizeCoins ?? BASE_CLAIM_PRIZE_COINS} coins.`,
     );
   };
 
@@ -1070,6 +1332,169 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
   const handleOpenPowerups = () => {
     navigation.navigate('Powerups');
+  };
+
+  const handleRunSimulation = async () => {
+    if (!user?.id) {
+      Alert.alert(
+        'Sign In Required',
+        'Simulation write is blocked by Supabase RLS until you are signed in. Please log in and try again.',
+      );
+      return;
+    }
+
+    const now = Date.now();
+    const durationSeconds = 16 * 60;
+    const startTimeMs = now - durationSeconds * 1000;
+    const center: LocationPoint = userLocation ?? {
+      latitude: mapRegion.latitude,
+      longitude: mapRegion.longitude,
+      timestamp: now,
+    };
+    const simulatedPath = createSimulationPath(center, startTimeMs, durationSeconds);
+    const simulatedDistance = calculatePathDistance(simulatedPath);
+    const simulatedPace = calculatePace(simulatedDistance, durationSeconds);
+    const simulatedSpeed = calculateSpeed(simulatedDistance, durationSeconds);
+    const simulatedCalories = calculateCalories(simulatedDistance);
+    const runId = createUuid();
+
+    const simulatedRun: Run = {
+      id: runId,
+      userId: currentUserId,
+      startTime: new Date(startTimeMs),
+      endTime: new Date(now),
+      path: simulatedPath,
+      distance: simulatedDistance,
+      duration: durationSeconds,
+      averagePace: simulatedPace,
+      averageSpeed: simulatedSpeed,
+      isLoop: true,
+      territoryClaimed: null,
+      territoriesChallenged: [],
+      calories: simulatedCalories,
+      pathRewardSummary: {
+        collectedDrops: [],
+        coinsCollected: 0,
+        shieldsCollected: 0,
+      },
+    };
+
+    try {
+      const simulationRecord = {
+        id: runId,
+        user_id: user.id,
+        username: currentUserName,
+        distance_km: Number(simulatedDistance.toFixed(3)),
+        duration_seconds: durationSeconds,
+        average_pace: simulatedPace,
+        average_speed_kmh: Number(simulatedSpeed.toFixed(2)),
+        calories: simulatedCalories,
+        path: simulatedPath.map(point => ({
+          latitude: point.latitude,
+          longitude: point.longitude,
+          timestamp: point.timestamp,
+        })),
+        started_at: new Date(startTimeMs).toISOString(),
+        ended_at: new Date(now).toISOString(),
+        source: 'map_simulation',
+      };
+
+      const primaryInsert = await supabase
+        .from('simulation_runs')
+        .insert(simulationRecord);
+
+      if (primaryInsert.error) {
+        const fallbackInsert = await supabase.from('runs').insert({
+          id: runId,
+          user_id: user.id,
+          start_time: new Date(startTimeMs).toISOString(),
+          end_time: new Date(now).toISOString(),
+          distance: Number(simulatedDistance.toFixed(3)),
+          duration: durationSeconds,
+          average_pace: simulatedPace,
+          average_speed: Number(simulatedSpeed.toFixed(2)),
+          is_loop: true,
+          territory_claimed: null,
+          territories_challenged: [],
+          calories: simulatedCalories,
+          path: simulationRecord.path,
+        });
+
+        if (fallbackInsert.error) {
+          throw {
+            primary: primaryInsert.error,
+            fallback: fallbackInsert.error,
+          };
+        }
+      }
+
+      await saveRun(simulatedRun);
+      await updateUserStats();
+
+      setSimulationPath(simulatedPath);
+      const simulatedActiveRun = createActiveRunState(
+        simulatedPath[0],
+        new Date(startTimeMs),
+      ) as ActiveRun;
+
+      if (isMounted.current) {
+        setActiveRun(simulatedActiveRun);
+        setTimer(0);
+      }
+
+      navigation.navigate('ActiveRun', {
+        initialActiveRun: simulatedActiveRun,
+        autoSimulate: true,
+        simulationPath: simulatedPath,
+        targetTerritory: selectedTerritory?.territory ?? null,
+        runnerProfile: {
+          id: currentUserId,
+          username: currentUserName,
+          color: '#29F0D7',
+        },
+        onPause: () => setActiveRun(previous => ({ ...previous, state: 'paused' })),
+        onResume: () => setActiveRun(previous => ({ ...previous, state: 'running' })),
+        onStop: () => {
+          setActiveRun(
+            hydratePathRewardState({
+              state: 'idle',
+              startTime: null,
+              path: [],
+              distance: 0,
+              duration: 0,
+              pausedDuration: 0,
+              isNearStart: false,
+            }),
+          );
+          setTimer(0);
+        },
+        onClaim: handleClaimTerritory,
+        onRunUpdate: (updatedRun: ActiveRun) => {
+          setActiveRun(updatedRun);
+          setTimer(updatedRun.duration);
+        },
+      });
+    } catch (error: any) {
+      console.error('Error saving simulation run:', error);
+      const primaryError = error?.primary ?? error;
+      const fallbackError = error?.fallback ?? null;
+      const primaryMessage = primaryError?.message ?? 'unknown';
+      const primaryCode = primaryError?.code ?? 'n/a';
+      const fallbackMessage = fallbackError?.message;
+      const combinedMessage = `${primaryMessage} ${fallbackMessage ?? ''}`;
+      const isRlsViolation =
+        combinedMessage.toLowerCase().includes('row-level security') ||
+        combinedMessage.toLowerCase().includes('violates row-level security policy');
+
+      Alert.alert(
+        'Simulation Failed',
+        isRlsViolation
+          ? 'Supabase RLS blocked this insert. Ensure you are logged in, and add an INSERT policy on runs that allows auth.uid() = user_id.'
+          : fallbackMessage
+          ? `Supabase insert failed.\nPrimary (simulation_runs): [${primaryCode}] ${primaryMessage}\nFallback (runs): ${fallbackMessage}`
+          : `Supabase insert failed.\n[${primaryCode}] ${primaryMessage}\nLikely causes: missing table, RLS policy blocking anon/auth user, or mismatched column names.`,
+      );
+    }
   };
 
   const handleAddDecoration = () => {
@@ -1110,11 +1535,14 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
     setTerritoryDecorations(previous => {
       const existingForTerritory = previous.filter(
-        decoration => decoration.territoryId === selectedTerritory.territory.id,
+        decoration =>
+          decoration.territoryId === selectedTerritory.territory.id &&
+          decoration.placement === item.placement,
       );
       const coordinate = getDecorationCoordinate(
         selectedTerritory.territory.boundary,
         existingForTerritory.map(decoration => decoration.coordinate),
+        item.placement,
       );
 
       return [
@@ -1124,6 +1552,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           territoryId: selectedTerritory.territory.id,
           label: item.label,
           image: item.image,
+          iconName: item.iconName,
+          placement: item.placement,
+          priceCoins: item.priceCoins,
           coordinate: {
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
@@ -1216,7 +1647,10 @@ const RunMap = ({ navigation }: { navigation: any }) => {
 
   const handleClaimTerritory = async () => {
     try {
-      if (activeRun.path.length < 10) {
+      const currentRun = activeRunRef.current;
+      const elapsedSeconds = timerRef.current;
+
+      if (currentRun.path.length < 10) {
         Alert.alert(
           'Loop Too Short',
           'Run a larger loop to carve a territory blob.',
@@ -1224,9 +1658,13 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         return;
       }
 
-      const polygon = [...activeRun.path];
+      const polygon = [...currentRun.path];
+      const hasExplicitClosure =
+        polygon.length > 1 &&
+        polygon[polygon.length - 1].latitude === polygon[0].latitude &&
+        polygon[polygon.length - 1].longitude === polygon[0].longitude;
       const closedPolygon =
-        polygon.length > 0 ? [...polygon, polygon[0]] : polygon;
+        polygon.length > 0 && !hasExplicitClosure ? [...polygon, polygon[0]] : polygon;
 
       const validation = isValidTerritory(closedPolygon);
       if (!validation.valid) {
@@ -1263,11 +1701,11 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       const completedRun: Run = {
         id: runId,
         userId: currentUserId,
-        startTime: activeRun.startTime || new Date(),
+        startTime: currentRun.startTime || new Date(),
         endTime: new Date(),
-        path: activeRun.path,
-        distance: activeRun.distance,
-        duration: timer,
+        path: currentRun.path,
+        distance: currentRun.distance,
+        duration: elapsedSeconds,
         averagePace: pace,
         averageSpeed: parseFloat(speed),
         isLoop: true,
@@ -1275,13 +1713,26 @@ const RunMap = ({ navigation }: { navigation: any }) => {
         territoriesChallenged: [],
         calories,
         pathRewardSummary: {
-          collectedDrops: activeRun.collectedDrops,
-          coinsCollected: activeRun.coinsCollected,
-          shieldsCollected: activeRun.shieldChargesEarned,
+          collectedDrops: currentRun.collectedDrops,
+          coinsCollected:
+            currentRun.coinsCollected +
+            (selectedTerritoryClaimEconomics?.prizeCoins ?? BASE_CLAIM_PRIZE_COINS),
+          shieldsCollected: currentRun.shieldChargesEarned,
         },
       };
 
       await Promise.all([saveRun(completedRun), saveTerritory(newTerritory)]);
+      await updateLocalUserRewards(
+        {
+          id: currentUserId,
+          username: currentUserName,
+          color: '#29F0D7',
+        },
+        {
+          coinsDelta:
+            selectedTerritoryClaimEconomics?.prizeCoins ?? BASE_CLAIM_PRIZE_COINS,
+        },
+      );
       await updateUserStats();
       await apiClaimTerritory({
         territory: newTerritory,
@@ -1292,7 +1743,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           averagePace: completedRun.averagePace,
           averageSpeed: completedRun.averageSpeed,
           calories: completedRun.calories,
-          path: activeRun.path,
+          path: currentRun.path,
         },
       }).catch(error =>
         console.warn('[api] territory claim failed:', error.message),
@@ -1303,14 +1754,14 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       }
 
       const activeMultiplier =
-        activeRun.multiplierExpiresAt &&
-        activeRun.multiplierExpiresAt > Date.now()
-          ? activeRun.captureMultiplier
+        currentRun.multiplierExpiresAt &&
+        currentRun.multiplierExpiresAt > Date.now()
+          ? currentRun.captureMultiplier
           : 1;
-      const xpEarned = Math.round((activeRun.distance * 90 + 180) * activeMultiplier);
+      const xpEarned = Math.round((currentRun.distance * 90 + 180) * activeMultiplier);
       showCaptureToast(
         `+${xpEarned} XP`,
-        `${getTerritoryName(newTerritory)} captured`,
+        `${getTerritoryName(newTerritory)} captured +${selectedTerritoryClaimEconomics?.prizeCoins ?? BASE_CLAIM_PRIZE_COINS} coins`,
       );
       setSelectedZone({ kind: 'claimed', id: newTerritory.id });
       setActiveRun(
@@ -1379,6 +1830,7 @@ const RunMap = ({ navigation }: { navigation: any }) => {
       }
     : null;
   const selectedZoneCenter = selectedTerritory?.center ?? selectedMarathon?.center ?? null;
+  const pointerLocation = useSpoofedPointer && spoofedPointer ? spoofedPointer : userLocation;
 
   return (
     <View style={styles.container}>
@@ -1390,7 +1842,9 @@ const RunMap = ({ navigation }: { navigation: any }) => {
           mapType={mapType}
           customMapStyle={mapType === 'standard' ? TACTICAL_MAP_STYLE : undefined}
           initialRegion={mapRegion}
-          showsUserLocation={hasLocationPermission}
+          initialCamera={DEFAULT_MAP_CAMERA}
+          pitchEnabled
+          showsUserLocation={!useSpoofedPointer && hasLocationPermission}
           showsMyLocationButton={false}
           followsUserLocation={activeRun.state === 'running'}
           onRegionChangeComplete={setMapRegion}
@@ -1429,7 +1883,18 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                 longitudeDelta: 0.01,
               };
               setMapRegion(nextRegion);
-              mapRef.current?.animateToRegion(nextRegion, 450);
+              mapRef.current?.animateCamera(
+                {
+                  center: {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                  },
+                  pitch: MAP_3D_PITCH,
+                  heading: 0,
+                  zoom: 16,
+                },
+                { duration: 450 },
+              );
             }
 
             if (activeRun.state === 'running') {
@@ -1450,6 +1915,20 @@ const RunMap = ({ navigation }: { navigation: any }) => {
             }
           }}
         >
+          {pointerLocation && (
+            <Marker
+              coordinate={{
+                latitude: pointerLocation.latitude,
+                longitude: pointerLocation.longitude,
+              }}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.spoofPointerMarker}>
+                <View style={styles.spoofPointerCore} />
+              </View>
+            </Marker>
+          )}
+
           {overlays.territories &&
             sortedTerritories.map(display => {
               const isSelected =
@@ -1541,6 +2020,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                     longitude: display.center.longitude,
                   }}
                   anchor={{ x: 0.5, y: 0.5 }}
+                  onPress={() =>
+                    handleTerritoryPress({
+                      kind: 'claimed',
+                      id: display.territory.id,
+                    })
+                  }
                 >
                   <View style={styles.markerWrapper}>
                     {shouldPulse && (
@@ -1603,6 +2088,12 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                     longitude: display.center.longitude,
                   }}
                   anchor={{ x: 0.5, y: 0.5 }}
+                  onPress={() =>
+                    handleTerritoryPress({
+                      kind: 'marathon',
+                      id: display.territory.id,
+                    })
+                  }
                 >
                   <View style={styles.markerWrapper}>
                     {shouldPulse && (
@@ -1655,14 +2146,39 @@ const RunMap = ({ navigation }: { navigation: any }) => {
               coordinate={decoration.coordinate}
               anchor={{ x: 0.5, y: 0.5 }}
             >
-              <View style={styles.territoryDecorationMarker}>
-                <Image
-                  source={decoration.image}
-                  style={styles.territoryDecorationImage}
-                />
-              </View>
+              {decoration.image ? (
+                <View style={styles.territoryDecorationMarker}>
+                  <Image
+                    source={decoration.image}
+                    style={styles.territoryDecorationImage}
+                  />
+                </View>
+              ) : (
+                <View
+                  style={[
+                    styles.territoryDecorationMarker,
+                    styles.territoryWallDecorationMarker,
+                  ]}
+                >
+                  <Icon
+                    name={decoration.iconName ?? 'reorder-three-outline'}
+                    size={28}
+                    color="#FFD6C7"
+                  />
+                </View>
+              )}
             </Marker>
           ))}
+
+          {simulationPath.length > 1 && (
+            <Polyline
+              coordinates={simulationPath}
+              strokeColor="rgba(245, 193, 93, 0.9)"
+              strokeWidth={4}
+              lineDashPattern={[10, 6]}
+              zIndex={3}
+            />
+          )}
 
           {activeRun.state !== 'idle' && previewBoundary.length > 2 && (
             <Polygon
@@ -1775,6 +2291,18 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                   </View>
                   <Text style={styles.decorationLabel}>New York</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.decorationOption}
+                  onPress={() => handleOpenDecorationSection('defenses')}
+                >
+                  <View
+                    style={[styles.decorationBadge, styles.decorationBadgeDefense]}
+                  >
+                    <Icon name="shield-half-outline" size={24} color="#FF9E7A" />
+                  </View>
+                  <Text style={styles.decorationLabel}>Defenses</Text>
+                </TouchableOpacity>
               </>
             ) : (
               <>
@@ -1785,7 +2313,15 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                     onPress={() => handleSelectDecorationItem(item)}
                   >
                     <View style={styles.decorationBadge}>
-                      <Image source={item.image} style={styles.decorationItemImage} />
+                      {item.image ? (
+                        <Image source={item.image} style={styles.decorationItemImage} />
+                      ) : (
+                        <Icon
+                          name={item.iconName ?? 'ellipse-outline'}
+                          size={26}
+                          color="#FF9E7A"
+                        />
+                      )}
                     </View>
                     <Text style={styles.decorationLabel}>{item.label}</Text>
                   </TouchableOpacity>
@@ -1948,12 +2484,42 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                     </Text>
                   </TouchableOpacity>
                 )}
+
+                {__DEV__ && (
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      useSpoofedPointer && styles.filterChipActiveTeal,
+                    ]}
+                    onPress={() => setUseSpoofedPointer(previous => !previous)}
+                  >
+                    <Icon
+                      name="navigate-outline"
+                      size={14}
+                      color={useSpoofedPointer ? '#0D4D7A' : '#5C7694'}
+                    />
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        useSpoofedPointer && styles.filterChipTextDark,
+                      ]}
+                    >
+                      GPS Spoof
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </>
           )}
         </View>
 
         <View style={styles.mapControls}>
+          <TouchableOpacity
+            style={[styles.controlButton, styles.simulationControlButton]}
+            onPress={handleRunSimulation}
+          >
+            <Icon name="flask-outline" size={20} color="#FFF1D8" />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.controlButton}
             onPress={handleCenterOnUser}
@@ -2143,6 +2709,19 @@ const RunMap = ({ navigation }: { navigation: any }) => {
                       decayHoursRemaining: selectedTerritory.decayHoursRemaining,
                       areaM2: selectedTerritory.territory.area * 1_000_000,
                       strength: selectedTerritory.territory.strength,
+                      decorationValueCoins: selectedTerritoryDecorationValue,
+                      claimStakeCoins:
+                        selectedTerritoryClaimEconomics?.stakeCoins ??
+                        BASE_CLAIM_STAKE_COINS,
+                      claimPrizeCoins:
+                        selectedTerritoryClaimEconomics?.prizeCoins ??
+                        BASE_CLAIM_PRIZE_COINS,
+                      decorations: selectedTerritoryDecorations.map(decoration => ({
+                        id: decoration.id,
+                        label: decoration.label,
+                        placement: decoration.placement,
+                        priceCoins: decoration.priceCoins ?? 0,
+                      })),
                     }
                   : null
               }
@@ -2379,6 +2958,10 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
+  simulationControlButton: {
+    backgroundColor: '#183456',
+    borderColor: '#57B8FF',
+  },
   startFab: {
     borderRadius: 32,
     overflow: 'hidden',
@@ -2461,6 +3044,22 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
+  },
+  spoofPointerMarker: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: 'rgba(103, 230, 255, 0.9)',
+    backgroundColor: 'rgba(103, 230, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spoofPointerCore: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#67E6FF',
   },
   captureCelebration: {
     position: 'absolute',
@@ -2603,6 +3202,10 @@ const styles = StyleSheet.create({
   decorationBadgeSecondary: {
     marginTop: 2,
   },
+  decorationBadgeDefense: {
+    borderColor: 'rgba(255, 158, 122, 0.32)',
+    backgroundColor: 'rgba(255, 158, 122, 0.1)',
+  },
   decorationItemImage: {
     width: 52,
     height: 52,
@@ -2622,6 +3225,11 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 16,
     resizeMode: 'contain',
+  },
+  territoryWallDecorationMarker: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 158, 122, 0.42)',
+    backgroundColor: 'rgba(37, 22, 20, 0.6)',
   },
   decorationLabel: {
     marginTop: 8,

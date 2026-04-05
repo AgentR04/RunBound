@@ -1,7 +1,7 @@
-import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useEffect } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -24,8 +24,8 @@ import Run from './screens/Run';
 import LoginScreen from './screens/auth/LoginScreen';
 import OnboardingScreen from './screens/auth/OnboardingScreen';
 import RegisterScreen from './screens/auth/RegisterScreen';
-import { BODY_FONT, TITLE_FONT, UI_FONT } from './theme/fonts';
 import { requestNotificationPermission } from './services/notifications';
+import { BODY_FONT, TITLE_FONT, UI_FONT } from './theme/fonts';
 
 function AuthStack() {
   const Stack = createNativeStackNavigator();

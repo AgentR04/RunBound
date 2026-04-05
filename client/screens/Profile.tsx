@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -20,6 +21,8 @@ import {
   upsertUserProfile,
   UserProfile,
 } from '../services/api';
+import ActivityStorage, { Activity } from '../services/ActivityStorage';
+import { Run } from '../types/game';
 import {
   ensureLocalUserProfile,
   getRuns,
@@ -120,9 +123,99 @@ function buildFallbackProfile(params: {
   };
 }
 
+type ProfileSession = {
+  id: string;
+  type: 'run' | 'walk' | 'cycle' | 'hike';
+  title: string;
+  startedAt: number;
+  durationSec: number;
+  distanceKm: number;
+  avgPaceMinKm: number | null;
+  avgSpeedKmh: number | null;
+  calories: number | null;
+  steps: number;
+  routePoints: number;
+  territoryClaimed: boolean;
+};
+
+function parsePaceLabelToMinutesPerKm(paceLabel: string): number | null {
+  const match = paceLabel.match(/(\d+)'(\d+)/);
+  if (!match) {
+    return null;
+  }
+  const minutes = Number(match[1]);
+  const seconds = Number(match[2]);
+  if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+    return null;
+  }
+  return minutes + seconds / 60;
+}
+
+function formatDurationLabel(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+function formatPaceLabel(minutesPerKm: number | null): string {
+  if (!minutesPerKm || minutesPerKm <= 0) {
+    return '--';
+  }
+  const minutes = Math.floor(minutesPerKm);
+  const seconds = Math.round((minutesPerKm - minutes) * 60);
+  return `${minutes}:${seconds.toString().padStart(2, '0')} /km`;
+}
+
+function toProfileSessionFromRun(run: Run): ProfileSession {
+  const paceFromLabel = parsePaceLabelToMinutesPerKm(run.averagePace);
+  const paceFromMath =
+    run.distance > 0 && run.duration > 0 ? run.duration / 60 / run.distance : null;
+
+  return {
+    id: run.id,
+    type: 'run',
+    title: run.isLoop ? 'Territory Run' : 'Open Run',
+    startedAt: new Date(run.startTime).getTime(),
+    durationSec: run.duration,
+    distanceKm: run.distance,
+    avgPaceMinKm: paceFromLabel ?? paceFromMath,
+    avgSpeedKmh: run.averageSpeed > 0 ? run.averageSpeed : null,
+    calories: Number.isFinite(run.calories) ? run.calories : null,
+    steps: Math.round(run.distance * 1312),
+    routePoints: run.path.length,
+    territoryClaimed: Boolean(run.territoryClaimed),
+  };
+}
+
+function toProfileSessionFromActivity(activity: Activity): ProfileSession {
+  return {
+    id: activity.id,
+    type: activity.type,
+    title: activity.title || `${activity.type.toUpperCase()} session`,
+    startedAt: activity.startTime,
+    durationSec: activity.duration ?? 0,
+    distanceKm: activity.distance ?? 0,
+    avgPaceMinKm: activity.avgPace ?? null,
+    avgSpeedKmh: activity.avgSpeed ?? null,
+    calories: activity.calories ?? null,
+    steps: Math.round((activity.distance ?? 0) * 1312),
+    routePoints: activity.pathData?.length ?? 0,
+    territoryClaimed: Boolean(activity.territoryClaimed),
+  };
+}
+
 const Profile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [leaderboard, setLeaderboard] = useState<UserProfile[]>([]);
+  const [sessions, setSessions] = useState<ProfileSession[]>([]);
+  const [selectedSession, setSelectedSession] = useState<ProfileSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,15 +248,28 @@ const Profile = () => {
           id: currentUserId,
           username: fallbackUsername,
         });
-        const [localRuns, localTerritories, storedUser] = await Promise.all([
+        const [localRuns, localTerritories, storedUser, activities] = await Promise.all([
           getRuns(),
           getTerritories(),
           getUser(),
+          ActivityStorage.getActivities(),
         ]);
         const ownedLocalTerritories = localTerritories.filter(
           territory => territory.ownerId === currentUserId,
         );
         const userRuns = localRuns.filter(run => run.userId === currentUserId);
+        const runSessions = userRuns.map(toProfileSessionFromRun);
+        const activitySessions = activities.map(toProfileSessionFromActivity);
+        const dedupedSessions = new Map<string, ProfileSession>();
+        [...activitySessions, ...runSessions].forEach(session => {
+          const existing = dedupedSessions.get(session.id);
+          if (!existing || session.startedAt > existing.startedAt) {
+            dedupedSessions.set(session.id, session);
+          }
+        });
+        const sortedSessions = [...dedupedSessions.values()].sort(
+          (left, right) => right.startedAt - left.startedAt,
+        );
         const localProfile = buildFallbackProfile({
           id: currentUserId,
           username: fallbackUsername,
@@ -216,6 +322,7 @@ const Profile = () => {
             : [localProfile];
 
         setProfile(profileData);
+        setSessions(sortedSessions);
         setLeaderboard(
           [...leaderData]
             .filter(Boolean)
@@ -276,6 +383,31 @@ const Profile = () => {
   ];
   const topThree = leaderboard.slice(0, 3);
   const rest = leaderboard.slice(3);
+  const analyticsSummary = useMemo(() => {
+    const totals = sessions.reduce(
+      (accumulator, session) => {
+        return {
+          distanceKm: accumulator.distanceKm + session.distanceKm,
+          durationSec: accumulator.durationSec + session.durationSec,
+          calories:
+            accumulator.calories + (session.calories && session.calories > 0 ? session.calories : 0),
+          routePoints: accumulator.routePoints + session.routePoints,
+        };
+      },
+      { distanceKm: 0, durationSec: 0, calories: 0, routePoints: 0 },
+    );
+    const averageSpeed =
+      totals.durationSec > 0 ? totals.distanceKm / (totals.durationSec / 3600) : 0;
+    const averagePace =
+      totals.distanceKm > 0 ? totals.durationSec / 60 / totals.distanceKm : 0;
+    return {
+      ...totals,
+      averageSpeed,
+      averagePace,
+      totalSessions: sessions.length,
+    };
+  }, [sessions]);
+  const recentSessions = sessions.slice(0, 6);
 
   if (loading) {
     return (
@@ -394,6 +526,81 @@ const Profile = () => {
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
               <View>
+                <Text style={styles.sectionEyebrow}>Analytics</Text>
+                <Text style={styles.sectionTitle}>Session insights</Text>
+              </View>
+              <Text style={styles.sectionMeta}>
+                {analyticsSummary.totalSessions} sessions
+              </Text>
+            </View>
+
+            <View style={styles.analyticsTiles}>
+              <View style={styles.analyticsTile}>
+                <Text style={styles.analyticsTileLabel}>Total Duration</Text>
+                <Text style={styles.analyticsTileValue}>
+                  {formatDurationLabel(analyticsSummary.durationSec)}
+                </Text>
+              </View>
+              <View style={styles.analyticsTile}>
+                <Text style={styles.analyticsTileLabel}>Avg Pace</Text>
+                <Text style={styles.analyticsTileValue}>
+                  {formatPaceLabel(analyticsSummary.averagePace)}
+                </Text>
+              </View>
+              <View style={styles.analyticsTile}>
+                <Text style={styles.analyticsTileLabel}>Avg Speed</Text>
+                <Text style={styles.analyticsTileValue}>
+                  {analyticsSummary.averageSpeed.toFixed(1)} km/h
+                </Text>
+              </View>
+              <View style={styles.analyticsTile}>
+                <Text style={styles.analyticsTileLabel}>Calories</Text>
+                <Text style={styles.analyticsTileValue}>
+                  {Math.round(analyticsSummary.calories)} kcal
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.sessionsHeaderRow}>
+              <Text style={styles.sessionsTitle}>Recent walk/run sessions</Text>
+              <Text style={styles.sessionsSubtitle}>Tap to inspect analytics</Text>
+            </View>
+
+            {recentSessions.length === 0 ? (
+              <Text style={styles.emptyText}>No sessions logged yet.</Text>
+            ) : (
+              <View style={styles.sessionsList}>
+                {recentSessions.map(session => (
+                  <TouchableOpacity
+                    key={session.id}
+                    style={styles.sessionRow}
+                    onPress={() => setSelectedSession(session)}
+                  >
+                    <View style={styles.sessionTypeBadge}>
+                      <Text style={styles.sessionTypeText}>
+                        {session.type.toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.sessionMeta}>
+                      <Text style={styles.sessionTitle}>{session.title}</Text>
+                      <Text style={styles.sessionSub}>
+                        {new Date(session.startedAt).toLocaleDateString()} •{' '}
+                        {session.distanceKm.toFixed(2)} km •{' '}
+                        {formatDurationLabel(session.durationSec)}
+                      </Text>
+                    </View>
+                    <Icon name="chevron-forward" size={18} color="#9AB5D1" />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </GlassPanel>
+
+        <GlassPanel style={styles.sectionShell}>
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View>
                 <Text style={styles.sectionEyebrow}>Badge Wall</Text>
                 <Text style={styles.sectionTitle}>Profile milestones</Text>
               </View>
@@ -483,6 +690,91 @@ const Profile = () => {
           </View>
         </GlassPanel>
       </ScrollView>
+
+      <Modal
+        visible={!!selectedSession}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedSession(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Session Analytics</Text>
+              <TouchableOpacity
+                style={styles.modalClose}
+                onPress={() => setSelectedSession(null)}
+              >
+                <Icon name="close" size={20} color="#F4F8FF" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedSession ? (
+              <View style={styles.modalContent}>
+                <Text style={styles.modalSessionName}>{selectedSession.title}</Text>
+                <Text style={styles.modalSessionDate}>
+                  {new Date(selectedSession.startedAt).toLocaleString()}
+                </Text>
+
+                <View style={styles.modalGrid}>
+                  <View style={styles.modalMetric}>
+                    <Text style={styles.modalMetricLabel}>Distance</Text>
+                    <Text style={styles.modalMetricValue}>
+                      {selectedSession.distanceKm.toFixed(2)} km
+                    </Text>
+                  </View>
+                  <View style={styles.modalMetric}>
+                    <Text style={styles.modalMetricLabel}>Duration</Text>
+                    <Text style={styles.modalMetricValue}>
+                      {formatDurationLabel(selectedSession.durationSec)}
+                    </Text>
+                  </View>
+                  <View style={styles.modalMetric}>
+                    <Text style={styles.modalMetricLabel}>Avg Pace</Text>
+                    <Text style={styles.modalMetricValue}>
+                      {formatPaceLabel(selectedSession.avgPaceMinKm)}
+                    </Text>
+                  </View>
+                  <View style={styles.modalMetric}>
+                    <Text style={styles.modalMetricLabel}>Avg Speed</Text>
+                    <Text style={styles.modalMetricValue}>
+                      {selectedSession.avgSpeedKmh
+                        ? `${selectedSession.avgSpeedKmh.toFixed(1)} km/h`
+                        : '--'}
+                    </Text>
+                  </View>
+                  <View style={styles.modalMetric}>
+                    <Text style={styles.modalMetricLabel}>Calories</Text>
+                    <Text style={styles.modalMetricValue}>
+                      {selectedSession.calories
+                        ? `${Math.round(selectedSession.calories)} kcal`
+                        : '--'}
+                    </Text>
+                  </View>
+                  <View style={styles.modalMetric}>
+                    <Text style={styles.modalMetricLabel}>Estimated Steps</Text>
+                    <Text style={styles.modalMetricValue}>
+                      {selectedSession.steps.toLocaleString()}
+                    </Text>
+                  </View>
+                  <View style={styles.modalMetric}>
+                    <Text style={styles.modalMetricLabel}>Route Points</Text>
+                    <Text style={styles.modalMetricValue}>
+                      {selectedSession.routePoints}
+                    </Text>
+                  </View>
+                  <View style={styles.modalMetric}>
+                    <Text style={styles.modalMetricLabel}>Territory</Text>
+                    <Text style={styles.modalMetricValue}>
+                      {selectedSession.territoryClaimed ? 'Claimed' : 'No claim'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -720,6 +1012,90 @@ const styles = StyleSheet.create({
     paddingBottom: 5,
     fontFamily: UI_FONT,
   },
+  analyticsTiles: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  analyticsTile: {
+    width: '48.5%',
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.14)',
+  },
+  analyticsTileLabel: {
+    color: '#9AB5D1',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    fontFamily: UI_FONT,
+  },
+  analyticsTileValue: {
+    marginTop: 8,
+    color: '#F4F8FF',
+    fontSize: 18,
+    fontFamily: STAT_FONT,
+  },
+  sessionsHeaderRow: {
+    marginTop: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sessionsTitle: {
+    color: '#F4F8FF',
+    fontSize: 16,
+    fontFamily: TITLE_FONT,
+  },
+  sessionsSubtitle: {
+    color: '#9AB5D1',
+    fontSize: 11,
+    fontFamily: UI_FONT,
+  },
+  sessionsList: {
+    marginTop: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  sessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  sessionTypeBadge: {
+    borderRadius: 999,
+    backgroundColor: 'rgba(103, 230, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.28)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  sessionTypeText: {
+    color: '#67E6FF',
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: UI_FONT,
+  },
+  sessionMeta: {
+    flex: 1,
+  },
+  sessionTitle: {
+    color: '#F1F6FC',
+    fontSize: 14,
+    fontFamily: TITLE_FONT,
+  },
+  sessionSub: {
+    marginTop: 3,
+    color: '#9AB5D1',
+    fontSize: 11,
+    fontFamily: UI_FONT,
+  },
   sectionShell: {},
   sectionCard: {
     padding: 18,
@@ -899,5 +1275,78 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 24,
     fontFamily: UI_FONT,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(6, 14, 26, 0.72)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#0D1A31',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 26,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    color: '#F4F8FF',
+    fontSize: 22,
+    fontFamily: TITLE_FONT,
+  },
+  modalClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  modalContent: {
+    marginTop: 12,
+  },
+  modalSessionName: {
+    color: '#F1F6FC',
+    fontSize: 18,
+    fontFamily: TITLE_FONT,
+  },
+  modalSessionDate: {
+    marginTop: 4,
+    color: '#9AB5D1',
+    fontSize: 12,
+    fontFamily: UI_FONT,
+  },
+  modalGrid: {
+    marginTop: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  modalMetric: {
+    width: '48.5%',
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(103, 230, 255, 0.16)',
+  },
+  modalMetricLabel: {
+    color: '#9AB5D1',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    fontFamily: UI_FONT,
+  },
+  modalMetricValue: {
+    marginTop: 6,
+    color: '#F4F8FF',
+    fontSize: 15,
+    fontFamily: STAT_FONT,
   },
 });

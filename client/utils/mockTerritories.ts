@@ -130,6 +130,150 @@ function approximateBlobAreaKm2(radiusMeters: number): number {
   return (Math.PI * radiusMeters * radiusMeters * 0.82) / 1_000_000;
 }
 
+type DecorationPlacement = 'interior' | 'edge';
+
+export type MockTerritoryDecoration = {
+  id: string;
+  territoryId: string;
+  label: string;
+  image?: any;
+  iconName?: string;
+  placement: DecorationPlacement;
+  priceCoins: number;
+  coordinate: {
+    latitude: number;
+    longitude: number;
+  };
+};
+
+type DecorationSeed = {
+  id: string;
+  label: string;
+  image?: any;
+  iconName?: string;
+  placement: DecorationPlacement;
+  priceCoins: number;
+};
+
+const MOCK_DECORATION_SETS: DecorationSeed[][] = [
+  [
+    {
+      id: 'wall',
+      label: 'Wall',
+      placement: 'edge',
+      iconName: 'reorder-three-outline',
+      priceCoins: 180,
+    },
+    {
+      id: 'loki-weapon',
+      label: 'Loki Weapon',
+      placement: 'interior',
+      image: require('../assets/img/loki_weapon-removebg-preview.png'),
+      priceCoins: 320,
+    },
+  ],
+  [
+    {
+      id: 'wall',
+      label: 'Wall',
+      placement: 'edge',
+      iconName: 'reorder-three-outline',
+      priceCoins: 180,
+    },
+    {
+      id: 'stark-tower',
+      label: 'Stark Tower',
+      placement: 'interior',
+      image: require('../assets/img/stark_tower.png'),
+      priceCoins: 520,
+    },
+  ],
+  [
+    {
+      id: 'wall',
+      label: 'Wall',
+      placement: 'edge',
+      iconName: 'reorder-three-outline',
+      priceCoins: 180,
+    },
+    {
+      id: 'thors-hammer',
+      label: "Thor's Hammer",
+      placement: 'interior',
+      image: require('../assets/img/thor_hammer.jpeg'),
+      priceCoins: 450,
+    },
+  ],
+  [
+    {
+      id: 'wall',
+      label: 'Wall',
+      placement: 'edge',
+      iconName: 'reorder-three-outline',
+      priceCoins: 180,
+    },
+    {
+      id: 'captain-america-shield',
+      label: 'Captain America Shield',
+      placement: 'interior',
+      image: require('../assets/img/cap_ssheil-removebg-preview.png'),
+      priceCoins: 360,
+    },
+  ],
+];
+
+function getBoundaryCenter(boundary: LocationPoint[]) {
+  const sum = boundary.reduce(
+    (accumulator, point) => ({
+      latitude: accumulator.latitude + point.latitude,
+      longitude: accumulator.longitude + point.longitude,
+    }),
+    { latitude: 0, longitude: 0 },
+  );
+
+  return {
+    latitude: sum.latitude / boundary.length,
+    longitude: sum.longitude / boundary.length,
+  };
+}
+
+function getEdgeCoordinate(
+  boundary: LocationPoint[],
+  territorySeed: string,
+  decorationSeed: string,
+) {
+  const boundaryIndex = hashValue(`${territorySeed}:${decorationSeed}:edge`) % boundary.length;
+  const nextIndex = (boundaryIndex + 1) % boundary.length;
+  const edgeProgress =
+    0.2 +
+    (hashValue(`${territorySeed}:${decorationSeed}:progress`) % 60) / 100;
+  const start = boundary[boundaryIndex];
+  const end = boundary[nextIndex];
+
+  return {
+    latitude: start.latitude + (end.latitude - start.latitude) * edgeProgress,
+    longitude: start.longitude + (end.longitude - start.longitude) * edgeProgress,
+  };
+}
+
+function getInteriorCoordinate(
+  boundary: LocationPoint[],
+  territorySeed: string,
+  decorationSeed: string,
+) {
+  const center = getBoundaryCenter(boundary);
+  const vertexIndex =
+    hashValue(`${territorySeed}:${decorationSeed}:vertex`) % boundary.length;
+  const vertex = boundary[vertexIndex];
+  const pull =
+    0.38 + (hashValue(`${territorySeed}:${decorationSeed}:pull`) % 20) / 100;
+
+  return {
+    latitude: center.latitude + (vertex.latitude - center.latitude) * pull,
+    longitude: center.longitude + (vertex.longitude - center.longitude) * pull,
+  };
+}
+
 function createMarathonLeaderboard(
   zoneId: string,
   currentUser?: { id: string; name: string },
@@ -288,6 +432,33 @@ export function getMockTerritories(
       isUnderChallenge: false,
       runId: `seeded-run-${index + 1}`,
     };
+  });
+}
+
+export function getMockTerritoryDecorations(
+  territories: Territory[],
+): MockTerritoryDecoration[] {
+  return territories.flatMap((territory, territoryIndex) => {
+    const seeds =
+      MOCK_DECORATION_SETS[territoryIndex % MOCK_DECORATION_SETS.length];
+
+    return seeds.map(seed => {
+      const coordinate =
+        seed.placement === 'edge'
+          ? getEdgeCoordinate(territory.boundary, territory.id, seed.id)
+          : getInteriorCoordinate(territory.boundary, territory.id, seed.id);
+
+      return {
+        id: `${territory.id}-mock-${seed.id}`,
+        territoryId: territory.id,
+        label: seed.label,
+        image: seed.image,
+        iconName: seed.iconName,
+        placement: seed.placement,
+        priceCoins: seed.priceCoins,
+        coordinate,
+      };
+    });
   });
 }
 

@@ -54,8 +54,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const getOnboardingKey = (userId: string) =>
     `${ONBOARDING_PENDING_KEY_PREFIX}${userId}`;
 
-  const loadOnboardingState = useCallback(async (userId?: string) => {
-    if (!userId) {
+  const loadOnboardingState = useCallback(async (authUser?: SupabaseUser | null) => {
+    if (!authUser?.id) {
       setNeedsOnboarding(false);
       setOnboardingLoading(false);
       return;
@@ -64,10 +64,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOnboardingLoading(true);
 
     try {
-      const pending = await appStorage.getItem(getOnboardingKey(userId));
-      setNeedsOnboarding(pending === 'pending');
+      const pending = await appStorage.getItem(getOnboardingKey(authUser.id));
+      const metadataRequiresOnboarding =
+        authUser.user_metadata?.onboarding_completed === false;
+      setNeedsOnboarding(pending === 'pending' || metadataRequiresOnboarding);
     } catch (error) {
-      logAuthError('loadOnboardingState', error, { userId });
+      logAuthError('loadOnboardingState', error, { userId: authUser.id });
       setNeedsOnboarding(false);
     } finally {
       setOnboardingLoading(false);
@@ -87,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isMounted) {
           setSession(currentSession);
           setLoading(false);
-          loadOnboardingState(currentSession?.user?.id).catch(() => null);
+          loadOnboardingState(currentSession?.user).catch(() => null);
         }
       })
       .catch(error => {
@@ -103,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
       setLoading(false);
-      loadOnboardingState(currentSession?.user?.id).catch(() => null);
+      loadOnboardingState(currentSession?.user).catch(() => null);
     });
 
     return () => {
@@ -121,7 +123,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
       options: {
-        data: { username },
+        data: {
+          username,
+          onboarding_completed: false,
+        },
       },
     });
 
@@ -142,6 +147,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await appStorage.setItem(getOnboardingKey(data.user.id), 'pending');
       setNeedsOnboarding(true);
       setOnboardingLoading(false);
+      if (data.session) {
+        setSession(data.session);
+      }
     }
   };
 
@@ -192,7 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (heroChoice) {
         const { data, error } = await supabase.auth.updateUser({
-          data: { superhero: heroChoice },
+          data: { superhero: heroChoice, onboarding_completed: true },
         });
 
         if (error) {
@@ -208,6 +216,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ...session,
             user: data.user,
           });
+        }
+      }
+
+      if (!heroChoice) {
+        const { error } = await supabase.auth.updateUser({
+          data: { onboarding_completed: true },
+        });
+        if (error) {
+          logAuthError('updateUser onboarding_completed', error, {
+            userId: session.user.id,
+          });
+          throw error;
         }
       }
 

@@ -54,6 +54,7 @@ export default function DropsHUD({
   multiplierRemainingMs,
   ghostRemainingMs,
   flashKey = 0,
+  topOffset = 168,
 }) {
   const flash = useRef(new Animated.Value(0)).current;
 
@@ -80,7 +81,7 @@ export default function DropsHUD({
   }, [flash, flashKey]);
 
   return (
-    <View style={styles.container} pointerEvents="box-none">
+    <View style={[styles.container, { top: topOffset }]} pointerEvents="box-none">
       <View style={styles.counterCard}>
         <Text style={styles.eyebrow}>Drops Collected</Text>
         <View style={styles.counterRow}>

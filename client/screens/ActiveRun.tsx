@@ -100,6 +100,8 @@ const TACTICAL_MAP_STYLE = [
 interface ActiveRunRouteParams {
   initialActiveRun: ActiveRunType;
   targetTerritory?: Territory | null;
+  autoSimulate?: boolean;
+  simulationPath?: LocationPoint[];
   runnerProfile: {
     id: string;
     username: string;
@@ -231,6 +233,8 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
   const {
     initialActiveRun,
     targetTerritory,
+    autoSimulate = false,
+    simulationPath = [],
     runnerProfile,
     onPause,
     onResume,
@@ -247,6 +251,10 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
   const [hudFlashKey, setHudFlashKey] = useState(0);
   const [isDrawerCollapsed, setIsDrawerCollapsed] = useState(true);
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const simulationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasAutoSimulationStarted = useRef(false);
+  const hasAutoSimulationCompleted = useRef(false);
+  const claimCallbackRef = useRef<() => void>(() => {});
   const mapRef = useRef<MapView>(null);
   const ghostBannerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const milestonesHit = useRef<Set<number>>(new Set());
@@ -445,6 +453,10 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
         clearInterval(timerInterval.current);
         timerInterval.current = null;
       }
+      if (simulationInterval.current) {
+        clearInterval(simulationInterval.current);
+        simulationInterval.current = null;
+      }
       if (ghostBannerTimeout.current) {
         clearTimeout(ghostBannerTimeout.current);
         ghostBannerTimeout.current = null;
@@ -469,22 +481,13 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
     }
   }, [activeRun.path, activeRun.state]);
 
-  const handleLocationUpdate = (event: any) => {
-    const { coordinate } = event.nativeEvent;
+  const applyLocationUpdate = useCallback((location: LocationPoint) => {
     const currentRun = activeRunRef.current;
 
-    if (!coordinate || currentRun.state !== 'running') {
+    if (currentRun.state !== 'running') {
       return;
     }
 
-    const location: LocationPoint = {
-      latitude: coordinate.latitude,
-      longitude: coordinate.longitude,
-      timestamp: Date.now(),
-      accuracy: coordinate.accuracy,
-      altitude: coordinate.altitude ?? undefined,
-      speed: coordinate.speed ?? undefined,
-    };
     const previousLocation = currentRun.path[currentRun.path.length - 1];
     const nextPath = [...currentRun.path, location];
     const nextDistance = calculatePathDistance(nextPath);
@@ -514,6 +517,29 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
       ghostUntil: rewardRun.ghostUntil,
     });
     handleRewardEvents(events);
+  }, [commitActiveRun, handleRewardEvents, runnerProfile.id]);
+
+  const handleLocationUpdate = (event: any) => {
+    if (autoSimulate) {
+      return;
+    }
+
+    const { coordinate } = event.nativeEvent;
+
+    if (!coordinate) {
+      return;
+    }
+
+    const location: LocationPoint = {
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+      timestamp: Date.now(),
+      accuracy: coordinate.accuracy,
+      altitude: coordinate.altitude ?? undefined,
+      speed: coordinate.speed ?? undefined,
+    };
+
+    applyLocationUpdate(location);
   };
 
   const distance = activeRun.distance;
@@ -575,7 +601,7 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
     );
   };
 
-  const handleClaim = () => {
+  const handleClaim = useCallback(() => {
     if (activeRun.path.length < 10) {
       Alert.alert(
         'Blob Too Small',
@@ -597,7 +623,53 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
     notifyTerritorySecured(targetName ?? undefined);
     scheduleInactivityReminder();
     navigation.goBack();
-  };
+  }, [activeRun.path.length, isNearStart, navigation, onClaim, runnerProfile.id, targetName]);
+
+  useEffect(() => {
+    claimCallbackRef.current = handleClaim;
+  }, [handleClaim]);
+
+  useEffect(() => {
+    if (
+      !autoSimulate ||
+      simulationPath.length < 2 ||
+      hasAutoSimulationStarted.current
+    ) {
+      return;
+    }
+
+    hasAutoSimulationStarted.current = true;
+    let pointIndex = 1;
+    simulationInterval.current = setInterval(() => {
+      if (pointIndex >= simulationPath.length) {
+        if (simulationInterval.current) {
+          clearInterval(simulationInterval.current);
+          simulationInterval.current = null;
+        }
+
+        if (!hasAutoSimulationCompleted.current) {
+          hasAutoSimulationCompleted.current = true;
+          setTimeout(() => {
+            claimCallbackRef.current();
+          }, 500);
+        }
+        return;
+      }
+
+      applyLocationUpdate({
+        ...simulationPath[pointIndex],
+        timestamp: Date.now(),
+      });
+      pointIndex += 1;
+    }, 900);
+
+    return () => {
+      if (simulationInterval.current) {
+        clearInterval(simulationInterval.current);
+        simulationInterval.current = null;
+      }
+    };
+  }, [autoSimulate, simulationPath, applyLocationUpdate]);
 
   return (
     <View style={styles.container}>
@@ -616,9 +688,9 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
           latitudeDelta: DEFAULT_MUMBAI_REGION.latitudeDelta,
           longitudeDelta: DEFAULT_MUMBAI_REGION.longitudeDelta,
         }}
-        showsUserLocation
+        showsUserLocation={!autoSimulate}
         showsMyLocationButton={false}
-        followsUserLocation={activeRun.state === 'running'}
+        followsUserLocation={activeRun.state === 'running' && !autoSimulate}
         onUserLocationChange={handleLocationUpdate}
       >
         {targetTerritory && targetTerritory.boundary.length > 2 && (
@@ -742,6 +814,7 @@ const ActiveRunScreen = ({ navigation, route }: any) => {
         multiplierRemainingMs={rewardHud.multiplierRemainingMs}
         ghostRemainingMs={rewardHud.ghostRemainingMs}
         flashKey={hudFlashKey}
+        topOffset={230}
       />
 
       {ghostBannerVisible && (
